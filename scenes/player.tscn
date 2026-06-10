@@ -35,20 +35,25 @@ script = ExtResource("1")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 shape = SubResource("1")
 
-[node name="CameraArm" type="SpringArm3D" parent="." unique_id=481279421]
+[node name="CameraPivot" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+
+[node name="CameraArm" type="SpringArm3D" parent="CameraPivot" unique_id=481279421]
 transform = Transform3D(1, 0, 0, 0, 0.9396926, 0.34202012, 0, -0.34202012, 0.9396926, 0, 0, 0)
 spring_length = 5.0
 
-[node name="Camera3D" type="Camera3D" parent="CameraArm" unique_id=292692450]
+[node name="Camera3D" type="Camera3D" parent="CameraPivot/CameraArm" unique_id=292692450]
 
-[node name="Superhero_Male_FullBody" parent="." unique_id=110819459 instance=ExtResource("2")]
+[node name="MeshPivot" type="Node3D" parent="."]
 
-[node name="UAL1" parent="." unique_id=1287037709 instance=ExtResource("3")]
+[node name="Superhero_Male_FullBody" parent="MeshPivot" unique_id=110819459 instance=ExtResource("2")]
+
+[node name="UAL1" parent="MeshPivot" unique_id=1287037709 instance=ExtResource("3")]
 
 [node name="AnimationTree" type="AnimationTree" parent="." unique_id=913035530]
 tree_root = SubResource("6")
-anim_player = NodePath("UAL1/AnimationPlayer")
+anim_player = NodePath("MeshPivot/UAL1/AnimationPlayer")
 parameters/conditions/is_moving = false
 parameters/conditions/is_stopped = false
 
-[editable path="Superhero_Male_FullBody"]
+[editable path="MeshPivot/Superhero_Male_FullBody"]

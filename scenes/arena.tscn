@@ -8,12 +8,32 @@ size = Vector3(20, 0.5, 20)
 [sub_resource type="BoxMesh" id="BoxMesh_e05a3"]
 size = Vector3(20, 0.5, 20)
 
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_arena"]
+
+[sub_resource type="Sky" id="Sky_arena"]
+sky_material = SubResource("ProceduralSkyMaterial_arena")
+
+[sub_resource type="Environment" id="Environment_arena"]
+background_mode = 1
+sky = SubResource("Sky_arena")
+ambient_light_source = 2
+ambient_light_energy = 0.3
+tonemap_mode = 2
+
 [node name="Arena" type="Node3D" unique_id=1829873246]
 
 [node name="Player" parent="." unique_id=1781697647 instance=ExtResource("1")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 
 [node name="AnimationTree2" type="AnimationTree" parent="Player" unique_id=122173188]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.7071068, 0.7071068, 0, -0.7071068, 0.7071068, 0, 10, 0)
+light_energy = 1.0
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_arena")
 
 [node name="Floor" type="StaticBody3D" parent="." unique_id=138309566]
 
