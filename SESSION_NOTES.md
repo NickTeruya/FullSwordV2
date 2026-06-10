@@ -197,3 +197,117 @@ output via FileAccess to res://tmp/ was the reliable debug channel.
   source/target setup. Acceptable cost given foundational understanding
   gained.
 - MCP capability audit deferred -- never blocked progress this session.
+
+Write a PowerShell here-string script to tmp/session3_notes.ps1 that
+appends the following to SESSION_NOTES.md. Use plain ASCII hyphens
+only -- no em dashes, no smart quotes.
+
+---
+
+## Session 3 -- State Machine, Camera System, Combat Foundation
+
+**Outcome:** Inner-layer state machine (Grounded/Attacking) working.
+Third-person camera with independent orbit. Light attack, sprint, jump,
+and arena lighting all functional. Character grounded on floor, mesh
+rotates to face movement direction.
+
+### What Was Done
+
+**State machine (Grounded/Attacking)**
+- enum State dispatched via match in _physics_process
+- Light attack on left click enters ATTACKING, zeros velocity, plays
+  Sword_Attack from UAL1, returns to GROUNDED on animation_finished
+- Pattern validated with sprint (Shift) as second Grounded behavior
+
+**Camera system (Sandfire-style)**
+- CameraPivot (Node3D) at chest height handles yaw independently
+- SpringArm3D child handles pitch with clamp
+- MeshPivot (Node3D) holds Superhero and UAL1 instances, rotates via
+  lerp_angle to face movement direction
+- Movement direction calculated from CameraPivot basis, not Player
+- Player CharacterBody3D never rotates -- only MeshPivot does
+- First attempt rotated Player directly, causing camera drift on turn.
+  Fixed by adding MeshPivot separation.
+
+**Grounding fix**
+- CollisionShape3D moved to Y=1.0 local so capsule bottom aligns
+  with Player origin. Character feet now on floor.
+
+**Character facing fix**
+- Quaternius mesh exports facing +Z (toward camera). Initially fixed
+  with 180-degree Y rotation on mesh instances. Replaced by MeshPivot
+  rotation system which handles facing dynamically.
+
+**Sprint**
+- Shift + direction uses sprint_speed (8.0 vs 5.0)
+- Sprint animation switches in, drops back to Walk/Idle on release
+- sprint_fov_change dead declaration caught and removed same session
+
+**Jump**
+- Space triggers velocity.y impulse when is_on_floor()
+- No Airborne state yet -- gravity handles descent
+- Floaty feel noted -- needs tuning next session
+
+**Arena lighting**
+- DirectionalLight3D with shadow (45-degree sun angle)
+- WorldEnvironment with procedural sky, ACES tonemap, sky ambient
+
+### Issues to Address Next Session
+
+- Jump is floaty -- needs gravity multiplier tuning and/or fall speed
+- Jump needs Airborne state in state machine (per V2_ARCHITECTURE)
+- Jump animation not wired -- currently stays in Walk/Idle while airborne
+- Camera distance and angle may need tuning once more gameplay is visible
+
+### Key Decisions
+
+- MeshPivot pattern chosen over rotating Player directly. Camera must
+  orbit independently of character facing -- standard third-person
+  action camera requirement. Rotating Player caused camera drift.
+- Sword_Attack from UAL1 used as placeholder. UAL2 combat animations
+  (Sword_Regular_A/B/C etc.) to be wired in a future session.
+- AnimationTree still inactive -- direct AnimationPlayer.play() calls
+  continue to work for current state count. AnimationTree becomes
+  necessary when blend trees are needed (directional locomotion,
+  attack combos).
+
+### Deferred
+
+- Airborne state (jump/fall) with animation
+- Jump feel tuning (gravity multiplier, fall speed)
+- UAL2 combat animations
+- AnimationTree crossfade
+- Dodge state with i-frames
+- HitArea3D/HurtArea3D wiring
+Task: Edit CLAUDE.md. Read first.
+
+Add a new section after the "Conventions" section, before "Verification":
+
+## Known Engine Behavior
+
+### .tscn sub-resource properties silently ignored at runtime
+
+Godot's scene loader does not reliably apply sub-resource property
+values from .tscn files in all cases. Confirmed occurrences:
+
+- Session 2: AnimationTree active, transitions, and source_node
+  properties stripped on Ctrl+S in editor.
+- Session 4: Environment background_mode, background_color, and
+  ProceduralSkyMaterial colors present on disk but rendered with
+  default values at runtime. D3D12 + AMD RX 6900 XT on Godot 4.6.3.
+
+**Convention:** When a .tscn sub-resource property does not take effect
+despite being correct on disk, set it in _ready() via script. Use
+@export vars so the values remain Inspector-tunable. This is the
+reliable path — .tscn serialization is the fallback, not the
+source of truth.
+
+### ProceduralSkyMaterial does not render on D3D12
+
+ProceduralSkyMaterial sky renders black on D3D12 12_0 with AMD
+Radeon RX 6900 XT in Godot 4.6.3. Background mode Color (BG_COLOR)
+works. Workaround: set background_mode = Environment.BG_COLOR in
+_ready(). Investigate Vulkan as alternative renderer in a future
+session.
+
+Success condition: read back the new section.

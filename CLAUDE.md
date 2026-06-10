@@ -37,6 +37,33 @@ Defined per-session in SESSION_NOTES.md. When in doubt, defer.
 - Dead declaration audit once per session (grep @export/const/var for
   anything unreferenced)
 
+## Known Engine Behavior
+
+### .tscn sub-resource properties silently ignored at runtime
+
+Godot's scene loader does not reliably apply sub-resource property
+values from .tscn files in all cases. Confirmed occurrences:
+
+- Session 2: AnimationTree active, transitions, and source_node
+  properties stripped on Ctrl+S in editor.
+- Session 4: Environment background_mode, background_color, and
+  ProceduralSkyMaterial colors present on disk but rendered with
+  default values at runtime. D3D12 + AMD RX 6900 XT on Godot 4.6.3.
+
+**Convention:** When a .tscn sub-resource property does not take effect
+despite being correct on disk, set it in _ready() via script. Use
+@export vars so the values remain Inspector-tunable. This is the
+reliable path — .tscn serialization is the fallback, not the
+source of truth.
+
+### ProceduralSkyMaterial does not render on D3D12
+
+ProceduralSkyMaterial sky renders black on D3D12 12_0 with AMD
+Radeon RX 6900 XT in Godot 4.6.3. Background mode Color (BG_COLOR)
+works. Workaround: set background_mode = Environment.BG_COLOR in
+_ready(). Investigate Vulkan as alternative renderer in a future
+session.
+
 ## Verification
 - After any change, state what to run/test in Godot and what "working" looks like
 - Do not claim success — show what to look for

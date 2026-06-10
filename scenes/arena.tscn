@@ -9,15 +9,20 @@ size = Vector3(20, 0.5, 20)
 size = Vector3(20, 0.5, 20)
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_arena"]
+sky_top_color = Color(0.4, 0.55, 0.85, 1)
+sky_horizon_color = Color(0.75, 0.8, 0.88, 1)
+ground_bottom_color = Color(0.45, 0.5, 0.55, 1)
+ground_horizon_color = Color(0.7, 0.75, 0.8, 1)
 
 [sub_resource type="Sky" id="Sky_arena"]
 sky_material = SubResource("ProceduralSkyMaterial_arena")
 
 [sub_resource type="Environment" id="Environment_arena"]
-background_mode = 1
+background_mode = 3
+background_color = Color(0.55, 0.7, 0.85, 1)
 sky = SubResource("Sky_arena")
 ambient_light_source = 2
-ambient_light_energy = 0.3
+ambient_light_energy = 0.55
 tonemap_mode = 2
 
 [node name="Arena" type="Node3D" unique_id=1829873246]
@@ -25,12 +30,12 @@ tonemap_mode = 2
 [node name="Player" parent="." unique_id=1781697647 instance=ExtResource("1")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 
-[node name="AnimationTree2" type="AnimationTree" parent="Player" unique_id=122173188]
-
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.7071068, 0.7071068, 0, -0.7071068, 0.7071068, 0, 10, 0)
-light_energy = 1.0
+light_color = Color(1, 0.95, 0.9, 1)
+light_energy = 0.75
 shadow_enabled = true
+shadow_blur = 1.5
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_arena")
