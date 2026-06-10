@@ -123,3 +123,77 @@ WASD movement and mouse look working. F5 runs, no console errors.
   Movement mechanics verified working first; AnimationTree adds
   visual polish on top of a confirmed-working foundation. Deliberate
   descope, not an oversight.
+
+## Session 2 -- Animation Pipeline Working (AnimationTree Deferred)
+
+**Outcome:** Superhero_Male_FullBody mesh animates with Idle/Walk via WASD.
+AnimationTree route abandoned mid-session; replaced with direct AnimationPlayer
+calls plus a per-frame script-based pose copy from UAL1 skeleton to Superhero
+skeleton. Session 2 goal met by a different path than planned.
+
+### What Was Done
+
+**UAL1 retarget configured.** SkeletonProfileHumanoid populated in Advanced
+Import Settings on UAL1.glb. All bones mapped green. Superhero_Male_FullBody
+was already configured from pre-flight.
+
+**Scene composition:**
+- Superhero_Male_FullBody.gltf instanced as child of Player (mesh source)
+- UAL1.glb instanced as child of Player, visible = false (animation source)
+- AnimationTree node added but not active
+- No RetargetModifier3D -- removed after the architecture proved
+  incompatible with our scene structure
+
+**Pose copy script.** _copy_pose() in player.gd iterates all bones of UAL1's
+GeneralSkeleton and writes position/rotation/scale onto Superhero's
+GeneralSkeleton each _physics_process. Works because both skeletons share
+the Quaternius Humanoid bone order and count.
+
+**Animation switching.** Direct AnimationPlayer.play() calls from
+_update_animation_conditions() switch between Idle and Walk based on
+velocity.length() vs walk_threshold (0.1).
+
+### Key Findings
+
+**RetargetModifier3D requires parenting.** Per the Godot 4.6 PR that added
+this node (TokageItLab #97824), the target (child) skeleton must be a child
+of RetargetModifier3D in the scene tree to guarantee process order. Our
+Superhero skeleton is inside an instanced subscene -- not reparentable
+without major restructuring. Script-based pose copy is the workaround.
+
+**AnimationTree silently fails when wired across instanced scenes.**
+Setting AnimationTree.root_node to the UAL1 instance did not fix track
+resolution. AnimationPlayer.play() directly on UAL1's AnimationPlayer
+works perfectly. AnimationTree integration deferred to a future session
+when blend trees become necessary (Sprint, directional Jog, attacks).
+
+**Godot save behavior is destructive on AnimationTree state.** Multiple
+edits to player.tscn had transitions, active=true, and source_node
+properties stripped on Ctrl+S in editor. Script-set properties survive.
+Lesson: set AnimationTree runtime properties in _ready() rather than .tscn
+when reliability matters.
+
+**Output panel rendering can glitch.** print() output didn't display
+multiple times during this session despite messages being emitted. File
+output via FileAccess to res://tmp/ was the reliable debug channel.
+
+### Deferred to Future Sessions
+
+- AnimationTree with blend trees for directional locomotion (Jog_Fwd_L/R,
+  Sprint blend, etc.)
+- Root motion extraction for committed attacks (V2_ARCHITECTURE pillar)
+- Combat state machine layer (Light/Heavy/Dodge from V2_ARCHITECTURE)
+- AnimationPlayer is a placeholder solution -- AnimationTree will be
+  required once we move beyond binary state switching
+
+### Process Notes
+
+- Two failed loops on RetargetModifier3D triggered the planned web search.
+  Search found the parenting requirement, leading to the script-based
+  pivot. Working as designed.
+- Session 2 was longer than expected (estimated single milestone, took a
+  significantly larger arc). Root cause: AnimationTree wiring assumed
+  knowledge from v1 that didn't transfer cleanly to a two-skeleton
+  source/target setup. Acceptable cost given foundational understanding
+  gained.
+- MCP capability audit deferred -- never blocked progress this session.
