@@ -13,6 +13,8 @@ size = Vector3(20, 0.5, 20)
 [node name="Player" parent="." unique_id=1781697647 instance=ExtResource("1")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 
+[node name="AnimationTree2" type="AnimationTree" parent="Player" unique_id=122173188]
+
 [node name="Floor" type="StaticBody3D" parent="." unique_id=138309566]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Floor" unique_id=947660337]

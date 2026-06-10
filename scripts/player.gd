@@ -2,11 +2,17 @@ extends CharacterBody3D
 
 @export var speed: float = 5.0
 @export var mouse_sensitivity: float = 0.003
+@export var walk_threshold: float = 0.1
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+var _src_skeleton: Skeleton3D
+var _dst_skeleton: Skeleton3D
 
 func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	_src_skeleton = $UAL1/Armature/GeneralSkeleton
+	_dst_skeleton = $Superhero_Male_FullBody/Armature/GeneralSkeleton
+	$UAL1/AnimationPlayer.play("Idle")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
@@ -30,3 +36,22 @@ func _physics_process(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0, speed)
 		velocity.z = move_toward(velocity.z, 0, speed)
 	move_and_slide()
+	_update_animation_conditions()
+	_copy_pose()
+
+func _update_animation_conditions() -> void:
+	var moving := velocity.length() > walk_threshold
+	var ap := $UAL1/AnimationPlayer
+	if moving and ap.current_animation != "Walk":
+		ap.play("Walk")
+	elif not moving and ap.current_animation != "Idle":
+		ap.play("Idle")
+
+func _copy_pose() -> void:
+	if not _src_skeleton or not _dst_skeleton:
+		return
+	var bone_count := _src_skeleton.get_bone_count()
+	for i in bone_count:
+		_dst_skeleton.set_bone_pose_position(i, _src_skeleton.get_bone_pose_position(i))
+		_dst_skeleton.set_bone_pose_rotation(i, _src_skeleton.get_bone_pose_rotation(i))
+		_dst_skeleton.set_bone_pose_scale(i, _src_skeleton.get_bone_pose_scale(i))
