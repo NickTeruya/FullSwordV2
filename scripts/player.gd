@@ -13,13 +13,21 @@ enum State { GROUNDED, AIRBORNE, ATTACKING }
 ## Threshold to distinguish "near apex" from "falling"
 @export var peak_velocity_threshold: float = 1.0
 @export var background_color: Color = Color(0.25, 0.45, 0.9, 1.0)
+@export var locomotion_xfade: float = 0.15     # Idle/Walk/Sprint cross-blends
+@export var jump_entry_xfade: float = 0.15      # ground state -> Jump_Start
+@export var jump_chain_xfade: float = 0.15      # Jump_Start->Jump, Jump->Jump_Land
+@export var landing_cancel_xfade: float = 0.15  # Jump_Land -> Walk/Sprint/Jump_Start
+@export var landing_settle_xfade: float = 0.15  # Jump_Land -> Idle (AUTO)
+@export var landing_protect_window: float = 0.12  # secs Jump_Land plays before move-cancel
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _current_state: State = State.GROUNDED
-var _is_landing: bool = false
+var _landing_started_ms: int = -1    # Time.get_ticks_msec() at landing; -1 = not landing
 var _camera_pivot: Node3D
 var _mesh_pivot: Node3D
 var _anim: AnimationPlayer
+var _anim_tree: AnimationTree
+var _state_machine: AnimationNodeStateMachinePlayback
 
 func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
@@ -32,7 +40,99 @@ func _ready() -> void:
 	_anim.add_animation_library("ual1", ual1_lib)
 	_anim.add_animation_library("ual2", ual2_lib)
 	print(_anim.get_animation_list())
-	_anim.play("ual1/Idle", 0.15)
+	# Build the locomotion state machine in code (libraries must already be
+	# added so the clip names resolve). Runtime tree state is set here, never
+	# in the .tscn — Godot strips AnimationTree sub-resource state on Ctrl+S.
+	_anim_tree = $AnimTree
+	_anim_tree.anim_player = _anim_tree.get_path_to(_anim)
+	var sm := AnimationNodeStateMachine.new()
+	var idle_node := AnimationNodeAnimation.new()
+	idle_node.animation = "ual1/Idle"
+	sm.add_node("Idle", idle_node)
+	var walk_node := AnimationNodeAnimation.new()
+	walk_node.animation = "ual1/Walk"
+	sm.add_node("Walk", walk_node)
+	var t_iw := AnimationNodeStateMachineTransition.new()
+	t_iw.xfade_time = locomotion_xfade
+	t_iw.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Idle", "Walk", t_iw)
+	var t_wi := AnimationNodeStateMachineTransition.new()
+	t_wi.xfade_time = locomotion_xfade
+	t_wi.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Walk", "Idle", t_wi)
+	var sprint_node := AnimationNodeAnimation.new()
+	sprint_node.animation = "ual1/Sprint"
+	sm.add_node("Sprint", sprint_node)
+	var jump_start_node := AnimationNodeAnimation.new()
+	jump_start_node.animation = "ual1/Jump_Start"
+	sm.add_node("Jump_Start", jump_start_node)
+	var jump_node := AnimationNodeAnimation.new()
+	jump_node.animation = "ual1/Jump"
+	sm.add_node("Jump", jump_node)
+	var jump_land_node := AnimationNodeAnimation.new()
+	jump_land_node.animation = "ual1/Jump_Land"
+	sm.add_node("Jump_Land", jump_land_node)
+	# Locomotion cross-transitions (code-driven via travel()).
+	var t_is := AnimationNodeStateMachineTransition.new()
+	t_is.xfade_time = locomotion_xfade
+	t_is.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Idle", "Sprint", t_is)
+	var t_si := AnimationNodeStateMachineTransition.new()
+	t_si.xfade_time = locomotion_xfade
+	t_si.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Sprint", "Idle", t_si)
+	var t_ws := AnimationNodeStateMachineTransition.new()
+	t_ws.xfade_time = locomotion_xfade
+	t_ws.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Walk", "Sprint", t_ws)
+	var t_sw := AnimationNodeStateMachineTransition.new()
+	t_sw.xfade_time = locomotion_xfade
+	t_sw.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Sprint", "Walk", t_sw)
+	# Jump entry from any ground state (code-driven).
+	var t_ijs := AnimationNodeStateMachineTransition.new()
+	t_ijs.xfade_time = jump_entry_xfade
+	t_ijs.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Idle", "Jump_Start", t_ijs)
+	var t_wjs := AnimationNodeStateMachineTransition.new()
+	t_wjs.xfade_time = jump_entry_xfade
+	t_wjs.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Walk", "Jump_Start", t_wjs)
+	var t_sjs := AnimationNodeStateMachineTransition.new()
+	t_sjs.xfade_time = jump_entry_xfade
+	t_sjs.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Sprint", "Jump_Start", t_sjs)
+	# Jump chain (code-driven; Jump_Start is committed through to Jump).
+	var t_jsj := AnimationNodeStateMachineTransition.new()
+	t_jsj.xfade_time = jump_chain_xfade
+	t_jsj.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_AUTO
+	sm.add_transition("Jump_Start", "Jump", t_jsj)
+	var t_jjl := AnimationNodeStateMachineTransition.new()
+	t_jjl.xfade_time = jump_chain_xfade
+	t_jjl.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Jump", "Jump_Land", t_jjl)
+	# Landing: AUTO-settles to Idle if uninterrupted. The Walk/Sprint/Jump_Start
+	# edges are cancel paths reached by code travel() when input is present.
+	var t_jli := AnimationNodeStateMachineTransition.new()
+	t_jli.xfade_time = landing_settle_xfade
+	t_jli.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_AUTO
+	sm.add_transition("Jump_Land", "Idle", t_jli)
+	var t_jlw := AnimationNodeStateMachineTransition.new()
+	t_jlw.xfade_time = landing_cancel_xfade
+	t_jlw.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Jump_Land", "Walk", t_jlw)
+	var t_jls := AnimationNodeStateMachineTransition.new()
+	t_jls.xfade_time = landing_cancel_xfade
+	t_jls.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Jump_Land", "Sprint", t_jls)
+	var t_jljs := AnimationNodeStateMachineTransition.new()
+	t_jljs.xfade_time = landing_cancel_xfade
+	t_jljs.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Jump_Land", "Jump_Start", t_jljs)
+	_anim_tree.tree_root = sm
+	_anim_tree.active = true
+	_state_machine = _anim_tree.get("parameters/playback")
+	_state_machine.start("Idle")
 	_anim.animation_finished.connect(_on_animation_finished)
 	var env_node := get_tree().current_scene.get_node("WorldEnvironment")
 	if env_node and env_node is WorldEnvironment:
@@ -94,8 +194,8 @@ func _process_airborne(delta: float) -> void:
 	_apply_movement(delta)
 	if is_on_floor():
 		_current_state = State.GROUNDED
-		_is_landing = true
-		_anim.play("ual1/Jump_Land", 0.1)
+		_state_machine.travel("Jump_Land")
+		_landing_started_ms = Time.get_ticks_msec()
 
 func _process_attacking(_delta: float) -> void:
 	velocity.x = 0
@@ -108,27 +208,41 @@ func _enter_attack() -> void:
 	_anim.play("ual1/Sword_Attack", 0.15)
 
 func _update_animation_conditions() -> void:
-	var ap := _anim
 	match _current_state:
 		State.GROUNDED:
-			if _is_landing:
-				return
+			# Animation-only landing protect: for a short window after touchdown,
+			# suppress the Walk/Sprint travel so Jump_Land reads before the
+			# move-cancel. Movement itself (_apply_movement) is NOT gated — the
+			# character keeps full speed; only the anim cancel is delayed.
+			var in_landing_protect := _landing_started_ms >= 0 and \
+				(Time.get_ticks_msec() - _landing_started_ms) < int(landing_protect_window * 1000.0)
+			if _landing_started_ms >= 0 and not in_landing_protect:
+				_landing_started_ms = -1  # window expired: one-shot, re-arm on next landing
 			var moving := velocity.length() > walk_threshold
 			var sprinting := Input.is_action_pressed("sprint") and moving
-			if sprinting and ap.current_animation != "ual1/Sprint":
-				ap.play("ual1/Sprint", 0.15)
-			elif not sprinting and moving and ap.current_animation != "ual1/Walk":
-				ap.play("ual1/Walk", 0.15)
-			elif not sprinting and not moving and ap.current_animation != "ual1/Idle":
-				ap.play("ual1/Idle", 0.15)
+			if sprinting:
+				if not in_landing_protect and _state_machine.get_current_node() != "Sprint":
+					_state_machine.travel("Sprint")
+			elif moving:
+				if not in_landing_protect and _state_machine.get_current_node() != "Walk":
+					_state_machine.travel("Walk")
+			else:
+				# No movement input. Travel to Idle only from locomotion states;
+				# on a landing (Jump/Jump_Land) leave it alone so the AUTO
+				# Jump_Land->Idle transition plays the landing through in full.
+				var node := _state_machine.get_current_node()
+				if node == "Walk" or node == "Sprint":
+					_state_machine.travel("Idle")
 		State.AIRBORNE:
-			if velocity.y > 0.0 and ap.current_animation != "ual1/Jump_Start":
-				ap.play("ual1/Jump_Start", 0.15)
-			elif velocity.y <= 0.0 and ap.current_animation != "ual1/Jump":
-				ap.play("ual1/Jump", 0.15)
+			# Enter Jump_Start once on the way up; it AUTO-advances to the Jump
+			# fall loop on its own. No code travel to "Jump" — that fired at
+			# apex and overrode the auto-advance (the old snap). Exclude "Jump"
+			# from the guard too: if Jump_Start auto-advances before apex (short
+			# clip), we must not yank back to Jump_Start while still rising.
+			var node := _state_machine.get_current_node()
+			if velocity.y > 0.0 and node != "Jump_Start" and node != "Jump":
+				_state_machine.travel("Jump_Start")
 
-func _on_animation_finished(anim_name: StringName) -> void:
+func _on_animation_finished(_anim_name: StringName) -> void:
 	if _current_state == State.ATTACKING:
 		_current_state = State.GROUNDED
-	elif anim_name == "ual1/Jump_Land":
-		_is_landing = false

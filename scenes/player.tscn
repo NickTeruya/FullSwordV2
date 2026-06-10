@@ -7,12 +7,14 @@
 
 [node name="Player" type="CharacterBody3D" unique_id=295594602]
 script = ExtResource("1")
+locomotion_xfade = 0.25
+jump_chain_xfade = 0.25
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1534405399]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 shape = SubResource("1")
 
-[node name="CameraPivot" type="Node3D" parent="."]
+[node name="CameraPivot" type="Node3D" parent="." unique_id=374097222]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 
 [node name="CameraArm" type="SpringArm3D" parent="CameraPivot" unique_id=481279421]
@@ -21,10 +23,12 @@ spring_length = 5.0
 
 [node name="Camera3D" type="Camera3D" parent="CameraPivot/CameraArm" unique_id=292692450]
 
-[node name="MeshPivot" type="Node3D" parent="."]
+[node name="MeshPivot" type="Node3D" parent="." unique_id=1733089200]
 
 [node name="Superhero_Male_FullBody" parent="MeshPivot" unique_id=110819459 instance=ExtResource("2")]
 
-[node name="CharacterAnimPlayer" type="AnimationPlayer" parent="."]
+[node name="CharacterAnimPlayer" type="AnimationPlayer" parent="." unique_id=345344454]
+
+[node name="AnimTree" type="AnimationTree" parent="." unique_id=2132860031]
 
 [editable path="MeshPivot/Superhero_Male_FullBody"]
