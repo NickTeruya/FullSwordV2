@@ -15,21 +15,25 @@ enum State { GROUNDED, AIRBORNE, ATTACKING }
 @export var background_color: Color = Color(0.25, 0.45, 0.9, 1.0)
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
-var _src_skeleton: Skeleton3D
-var _dst_skeleton: Skeleton3D
 var _current_state: State = State.GROUNDED
 var _is_landing: bool = false
 var _camera_pivot: Node3D
 var _mesh_pivot: Node3D
+var _anim: AnimationPlayer
 
 func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
-	_src_skeleton = $MeshPivot/UAL1/Armature/GeneralSkeleton
-	_dst_skeleton = $MeshPivot/Superhero_Male_FullBody/Armature/GeneralSkeleton
 	_camera_pivot = $CameraPivot
 	_mesh_pivot = $MeshPivot
-	$MeshPivot/UAL1/AnimationPlayer.play("Idle", 0.15)
-	$MeshPivot/UAL1/AnimationPlayer.animation_finished.connect(_on_animation_finished)
+	_anim = $CharacterAnimPlayer
+	_anim.root_node = _anim.get_path_to($MeshPivot/Superhero_Male_FullBody)
+	var ual1_lib: AnimationLibrary = load("res://assets/animations/UAL1.glb")
+	var ual2_lib: AnimationLibrary = load("res://assets/animations/UAL2.glb")
+	_anim.add_animation_library("ual1", ual1_lib)
+	_anim.add_animation_library("ual2", ual2_lib)
+	print(_anim.get_animation_list())
+	_anim.play("ual1/Idle", 0.15)
+	_anim.animation_finished.connect(_on_animation_finished)
 	var env_node := get_tree().current_scene.get_node("WorldEnvironment")
 	if env_node and env_node is WorldEnvironment:
 		var env: Environment = env_node.environment
@@ -63,7 +67,6 @@ func _physics_process(delta: float) -> void:
 			_process_attacking(delta)
 	move_and_slide()
 	_update_animation_conditions()
-	_copy_pose()
 
 func _apply_movement(delta: float) -> void:
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
@@ -92,7 +95,7 @@ func _process_airborne(delta: float) -> void:
 	if is_on_floor():
 		_current_state = State.GROUNDED
 		_is_landing = true
-		$MeshPivot/UAL1/AnimationPlayer.play("Jump_Land", 0.1)
+		_anim.play("ual1/Jump_Land", 0.1)
 
 func _process_attacking(_delta: float) -> void:
 	velocity.x = 0
@@ -102,39 +105,30 @@ func _enter_attack() -> void:
 	_current_state = State.ATTACKING
 	velocity.x = 0
 	velocity.z = 0
-	$MeshPivot/UAL1/AnimationPlayer.play("Sword_Attack", 0.15)
+	_anim.play("ual1/Sword_Attack", 0.15)
 
 func _update_animation_conditions() -> void:
-	var ap := $MeshPivot/UAL1/AnimationPlayer
+	var ap := _anim
 	match _current_state:
 		State.GROUNDED:
 			if _is_landing:
 				return
 			var moving := velocity.length() > walk_threshold
 			var sprinting := Input.is_action_pressed("sprint") and moving
-			if sprinting and ap.current_animation != "Sprint":
-				ap.play("Sprint", 0.15)
-			elif not sprinting and moving and ap.current_animation != "Walk":
-				ap.play("Walk", 0.15)
-			elif not sprinting and not moving and ap.current_animation != "Idle":
-				ap.play("Idle", 0.15)
+			if sprinting and ap.current_animation != "ual1/Sprint":
+				ap.play("ual1/Sprint", 0.15)
+			elif not sprinting and moving and ap.current_animation != "ual1/Walk":
+				ap.play("ual1/Walk", 0.15)
+			elif not sprinting and not moving and ap.current_animation != "ual1/Idle":
+				ap.play("ual1/Idle", 0.15)
 		State.AIRBORNE:
-			if velocity.y > 0.0 and ap.current_animation != "Jump_Start":
-				ap.play("Jump_Start", 0.15)
-			elif velocity.y <= 0.0 and ap.current_animation != "Jump":
-				ap.play("Jump", 0.15)
+			if velocity.y > 0.0 and ap.current_animation != "ual1/Jump_Start":
+				ap.play("ual1/Jump_Start", 0.15)
+			elif velocity.y <= 0.0 and ap.current_animation != "ual1/Jump":
+				ap.play("ual1/Jump", 0.15)
 
 func _on_animation_finished(anim_name: StringName) -> void:
 	if _current_state == State.ATTACKING:
 		_current_state = State.GROUNDED
-	elif anim_name == "Jump_Land":
+	elif anim_name == "ual1/Jump_Land":
 		_is_landing = false
-
-func _copy_pose() -> void:
-	if not _src_skeleton or not _dst_skeleton:
-		return
-	var bone_count := _src_skeleton.get_bone_count()
-	for i in bone_count:
-		_dst_skeleton.set_bone_pose_position(i, _src_skeleton.get_bone_pose_position(i))
-		_dst_skeleton.set_bone_pose_rotation(i, _src_skeleton.get_bone_pose_rotation(i))
-		_dst_skeleton.set_bone_pose_scale(i, _src_skeleton.get_bone_pose_scale(i))

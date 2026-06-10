@@ -2,31 +2,8 @@
 
 [ext_resource type="Script" uid="uid://u2oftkdf8tpf" path="res://scripts/player.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://ddrka6sywpyb6" path="res://assets/characters/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf" id="2"]
-[ext_resource type="PackedScene" uid="uid://b6hwhepcrpwcs" path="res://assets/animations/UAL1.glb" id="3"]
 
 [sub_resource type="CapsuleShape3D" id="1"]
-
-[sub_resource type="AnimationNodeAnimation" id="2"]
-animation = &"Idle"
-
-[sub_resource type="AnimationNodeAnimation" id="3"]
-animation = &"Walk"
-
-[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_qhqgy"]
-advance_mode = 2
-advance_condition = &"is_moving"
-
-[sub_resource type="AnimationNodeStateMachineTransition" id="AnimationNodeStateMachineTransition_dqkch"]
-advance_mode = 2
-advance_condition = &"is_stopped"
-
-[sub_resource type="AnimationNodeStateMachine" id="6"]
-states/Idle/node = SubResource("2")
-states/Idle/position = Vector2(-200, 0)
-states/Walk/node = SubResource("3")
-states/Walk/position = Vector2(200, 0)
-transitions = ["Idle", "Walk", SubResource("AnimationNodeStateMachineTransition_qhqgy"), "Walk", "Idle", SubResource("AnimationNodeStateMachineTransition_dqkch")]
-graph_offset = Vector2(-366.39853, -225.15048)
 
 [node name="Player" type="CharacterBody3D" unique_id=295594602]
 script = ExtResource("1")
@@ -48,12 +25,6 @@ spring_length = 5.0
 
 [node name="Superhero_Male_FullBody" parent="MeshPivot" unique_id=110819459 instance=ExtResource("2")]
 
-[node name="UAL1" parent="MeshPivot" unique_id=1287037709 instance=ExtResource("3")]
-
-[node name="AnimationTree" type="AnimationTree" parent="." unique_id=913035530]
-tree_root = SubResource("6")
-anim_player = NodePath("MeshPivot/UAL1/AnimationPlayer")
-parameters/conditions/is_moving = false
-parameters/conditions/is_stopped = false
+[node name="CharacterAnimPlayer" type="AnimationPlayer" parent="."]
 
 [editable path="MeshPivot/Superhero_Male_FullBody"]
