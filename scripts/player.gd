@@ -5,6 +5,7 @@ enum State { GROUNDED, ATTACKING }
 @export var speed: float = 5.0
 @export var mouse_sensitivity: float = 0.003
 @export var walk_threshold: float = 0.1
+@export var sprint_speed: float = 8.0
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _src_skeleton: Skeleton3D
@@ -42,17 +43,21 @@ func _physics_process(delta: float) -> void:
 func _process_grounded(_delta: float) -> void:
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var direction := (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
+	var sprinting := Input.is_action_pressed("sprint") and direction != Vector3.ZERO
 	if direction:
-		velocity.x = direction.x * speed
-		velocity.z = direction.z * speed
+		var current_speed := sprint_speed if sprinting else speed
+		velocity.x = direction.x * current_speed
+		velocity.z = direction.z * current_speed
 	else:
 		velocity.x = move_toward(velocity.x, 0, speed)
 		velocity.z = move_toward(velocity.z, 0, speed)
 	var moving := velocity.length() > walk_threshold
 	var ap := $UAL1/AnimationPlayer
-	if moving and ap.current_animation != "Walk":
+	if sprinting and ap.current_animation != "Sprint":
+		ap.play("Sprint")
+	elif not sprinting and moving and ap.current_animation != "Walk":
 		ap.play("Walk")
-	elif not moving and ap.current_animation != "Idle":
+	elif not sprinting and not moving and ap.current_animation != "Idle":
 		ap.play("Idle")
 	if Input.is_action_just_pressed("attack_light"):
 		_enter_attack()
