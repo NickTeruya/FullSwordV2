@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bxk5a8qt1c0p"
-path.s3tc="res://.godot/imported/T_Peasant_Normal.png-99d84c881df43d6c8f6691d15f21ee52.s3tc.ctex"
+path.s3tc="res://.godot/imported/T_Peasant_Normal.png-033eb608cfae48183fcb685638a4bb43.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/fantasy_outfits/T_Peasant_Normal.png"
-dest_files=["res://.godot/imported/T_Peasant_Normal.png-99d84c881df43d6c8f6691d15f21ee52.s3tc.ctex"]
+source_file="res://assets/characters/fantasy_outfits/T_Peasant_Normal.png"
+dest_files=["res://.godot/imported/T_Peasant_Normal.png-033eb608cfae48183fcb685638a4bb43.s3tc.ctex"]
 
 [params]
 

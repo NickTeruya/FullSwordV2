@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://dhtexfngtlqif"
-path="res://.godot/imported/Female_Peasant.gltf-90bedd653fc9f76d34d559b54661745a.scn"
+path="res://.godot/imported/Female_Peasant.gltf-128d271d6b7ce6b68cc45baabcfc5633.scn"
 
 [deps]
 
-source_file="res://assets/fantasy_outfits/Female_Peasant.gltf"
-dest_files=["res://.godot/imported/Female_Peasant.gltf-90bedd653fc9f76d34d559b54661745a.scn"]
+source_file="res://assets/characters/fantasy_outfits/Female_Peasant.gltf"
+dest_files=["res://.godot/imported/Female_Peasant.gltf-128d271d6b7ce6b68cc45baabcfc5633.scn"]
 
 [params]
 

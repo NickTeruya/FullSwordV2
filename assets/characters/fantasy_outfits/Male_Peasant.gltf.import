@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://d3phn5y5klaei"
-path="res://.godot/imported/Male_Peasant.gltf-a7c99e3c4bf1ff7e750b30ad065c62b4.scn"
+path="res://.godot/imported/Male_Peasant.gltf-8b6153c2514972e678b960c51c280b27.scn"
 
 [deps]
 
-source_file="res://assets/fantasy_outfits/Male_Peasant.gltf"
-dest_files=["res://.godot/imported/Male_Peasant.gltf-a7c99e3c4bf1ff7e750b30ad065c62b4.scn"]
+source_file="res://assets/characters/fantasy_outfits/Male_Peasant.gltf"
+dest_files=["res://.godot/imported/Male_Peasant.gltf-8b6153c2514972e678b960c51c280b27.scn"]
 
 [params]
 

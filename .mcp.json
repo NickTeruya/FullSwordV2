@@ -1,0 +1,15 @@
+﻿{
+  "mcpServers": {
+    "godot": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "C:\\Users\\nickw\\Documents\\godot-mcp\\build\\index.js"
+      ],
+      "env": {
+        "GODOT_PATH": "C:\\Users\\nickw\\Desktop\\Game Dev\\Godot_v4.6.3-stable_win64.exe",
+        "GODOT_PROJECT_PATH": "C:\\Users\\nickw\\Documents\\FullSwordV2"
+      }
+    }
+  }
+}

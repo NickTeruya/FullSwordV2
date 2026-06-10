@@ -145,8 +145,34 @@ First message should include:
 - Status: what was last done, what's next
 - Confirmation that project knowledge files are loaded
 
-### MCP Capabilities
+## MCP Capabilities
 
-Unknown at v2 start. First task of Session 1 is an MCP capability
-audit. Document results here under a new "MCP Capabilities" section
-after that audit completes.
+Audited Session 1. Godot MCP server connected with 14 tools.
+
+### Available Tools
+- **add_node** — Add a node to an existing scene
+- **create_scene** — Create a new Godot scene file
+- **export_mesh_library** — Export a scene as a MeshLibrary resource
+- **get_debug_output** — Get current debug output and errors
+- **get_godot_version** — Get the installed Godot version
+- **get_project_info** — Retrieve project metadata
+- **get_uid** — Get the UID for a specific file (Godot 4.4+)
+- **launch_editor** — Launch the Godot editor for a project
+- **list_projects** — List Godot projects in a directory
+- **load_sprite** — Load a sprite into a Sprite2D node (2D only — not useful for v2)
+- **run_project** — Run the Godot project and capture output
+- **save_scene** — Save changes to a scene file
+- **stop_project** — Stop the currently running project
+- **update_project_uids** — Update UID references by resaving resources (Godot 4.4+)
+
+### Capability Assessment
+- **Can do:** Create new scenes, add nodes, save scenes, run/stop project,
+  capture debug output
+- **Cannot do:** Read existing scene tree, inspect node properties, update
+  node properties on existing nodes
+- **Fallback:** Direct .tscn text editing for all read and modify operations.
+  MCP save_scene is destructive on scenes instancing .glb assets — never use
+  on character/animation scenes (existing rule stands).
+- **Most useful tools for v2:** get_debug_output (diagnostics), run_project +
+  stop_project (automated test cycle), create_scene + add_node (scaffolding
+  new scenes)

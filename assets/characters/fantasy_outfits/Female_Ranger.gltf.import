@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://d4aevw86fowlr"
-path="res://.godot/imported/Female_Ranger.gltf-ac9a9355684dead9adf704a6a02b75e6.scn"
+path="res://.godot/imported/Female_Ranger.gltf-dce7f5de03510c2170754964b040d333.scn"
 
 [deps]
 
-source_file="res://assets/fantasy_outfits/Female_Ranger.gltf"
-dest_files=["res://.godot/imported/Female_Ranger.gltf-ac9a9355684dead9adf704a6a02b75e6.scn"]
+source_file="res://assets/characters/fantasy_outfits/Female_Ranger.gltf"
+dest_files=["res://.godot/imported/Female_Ranger.gltf-dce7f5de03510c2170754964b040d333.scn"]
 
 [params]
 
