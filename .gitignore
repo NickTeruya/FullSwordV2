@@ -1,0 +1,11 @@
+# Godot-specific ignores
+.godot/
+*.translation
+
+# Keep import metadata
+!*.import
+
+# OS junk
+.DS_Store
+Thumbs.db
+.mcp.json
