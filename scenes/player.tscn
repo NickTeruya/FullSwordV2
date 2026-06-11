@@ -9,6 +9,7 @@
 script = ExtResource("1")
 locomotion_xfade = 0.25
 jump_chain_xfade = 0.25
+root_motion_scale = 2.0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1534405399]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
