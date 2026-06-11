@@ -2,28 +2,37 @@ extends CharacterBody3D
 
 enum State { GROUNDED, AIRBORNE, ATTACKING }
 
+@export_group("Movement")
 @export var speed: float = 5.0
-@export var mouse_sensitivity: float = 0.003
-@export var walk_threshold: float = 0.1
 @export var sprint_speed: float = 8.0
+@export var walk_threshold: float = 0.1
 @export var rotation_speed: float = 10.0
+@export var mouse_sensitivity: float = 0.003
+
+@export_group("Jump & Gravity")
 @export var jump_velocity: float = 4.5
 @export var fall_gravity_multiplier: float = 2.0
 @export var jump_peak_gravity_multiplier: float = 0.6
 ## Threshold to distinguish "near apex" from "falling"
 @export var peak_velocity_threshold: float = 1.0
-@export var background_color: Color = Color(0.25, 0.45, 0.9, 1.0)
+
+@export_group("Locomotion Blending")
 @export var locomotion_xfade: float = 0.15     # Idle/Walk/Sprint cross-blends
 @export var jump_entry_xfade: float = 0.15      # ground state -> Jump_Start
 @export var jump_chain_xfade: float = 0.15      # Jump_Start->Jump, Jump->Jump_Land
 @export var landing_cancel_xfade: float = 0.15  # Jump_Land -> Walk/Sprint/Jump_Start
 @export var landing_settle_xfade: float = 0.15  # Jump_Land -> Idle (AUTO)
 @export var landing_protect_window: float = 0.12  # secs Jump_Land plays before move-cancel
+
+@export_group("Combat")
 @export var attack_entry_xfade: float = 0.1    # ground state -> Attack_A
 @export var attack_chain_xfade: float = 0.1    # Attack_A->Rec->Attack_B->Rec->Attack_C
 @export var attack_settle_xfade: float = 0.15  # Rec/Attack_C -> Idle (AUTO)
 @export var chain_window_open: float = 0.25    # secs into a _Rec clip before a queued attack chains
 @export var root_motion_scale: float = 1.0     # multiplier on extracted attack root motion
+
+@export_group("Environment")
+@export var background_color: Color = Color(0.25, 0.45, 0.9, 1.0)
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _current_state: State = State.GROUNDED
