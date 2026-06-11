@@ -19,6 +19,9 @@ enum State { GROUNDED, AIRBORNE, ATTACKING }
 @export var landing_cancel_xfade: float = 0.15  # Jump_Land -> Walk/Sprint/Jump_Start
 @export var landing_settle_xfade: float = 0.15  # Jump_Land -> Idle (AUTO)
 @export var landing_protect_window: float = 0.12  # secs Jump_Land plays before move-cancel
+@export var attack_entry_xfade: float = 0.1    # ground state -> Attack_A
+@export var attack_chain_xfade: float = 0.1    # Attack_A->Rec->Attack_B->Rec->Attack_C
+@export var attack_settle_xfade: float = 0.15  # Rec/Attack_C -> Idle (AUTO)
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _current_state: State = State.GROUNDED
@@ -39,7 +42,6 @@ func _ready() -> void:
 	var ual2_lib: AnimationLibrary = load("res://assets/animations/UAL2.glb")
 	_anim.add_animation_library("ual1", ual1_lib)
 	_anim.add_animation_library("ual2", ual2_lib)
-	print(_anim.get_animation_list())
 	# Build the locomotion state machine in code (libraries must already be
 	# added so the clip names resolve). Runtime tree state is set here, never
 	# in the .tscn — Godot strips AnimationTree sub-resource state on Ctrl+S.
@@ -129,11 +131,70 @@ func _ready() -> void:
 	t_jljs.xfade_time = landing_cancel_xfade
 	t_jljs.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
 	sm.add_transition("Jump_Land", "Jump_Start", t_jljs)
+	# Attack subgraph (UAL2 Regular sword combo, code-driven via travel()).
+	var attack_a_node := AnimationNodeAnimation.new()
+	attack_a_node.animation = "ual2/Sword_Regular_A"
+	sm.add_node("Attack_A", attack_a_node)
+	var attack_a_rec_node := AnimationNodeAnimation.new()
+	attack_a_rec_node.animation = "ual2/Sword_Regular_A_Rec"
+	sm.add_node("Attack_A_Rec", attack_a_rec_node)
+	var attack_b_node := AnimationNodeAnimation.new()
+	attack_b_node.animation = "ual2/Sword_Regular_B"
+	sm.add_node("Attack_B", attack_b_node)
+	var attack_b_rec_node := AnimationNodeAnimation.new()
+	attack_b_rec_node.animation = "ual2/Sword_Regular_B_Rec"
+	sm.add_node("Attack_B_Rec", attack_b_rec_node)
+	var attack_c_node := AnimationNodeAnimation.new()
+	attack_c_node.animation = "ual2/Sword_Regular_C"
+	sm.add_node("Attack_C", attack_c_node)
+	# Attack entry from any ground state (code-driven).
+	var t_ia := AnimationNodeStateMachineTransition.new()
+	t_ia.xfade_time = attack_entry_xfade
+	t_ia.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Idle", "Attack_A", t_ia)
+	var t_wa := AnimationNodeStateMachineTransition.new()
+	t_wa.xfade_time = attack_entry_xfade
+	t_wa.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Walk", "Attack_A", t_wa)
+	var t_sa := AnimationNodeStateMachineTransition.new()
+	t_sa.xfade_time = attack_entry_xfade
+	t_sa.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Sprint", "Attack_A", t_sa)
+	# Attack chain (code-driven; A/B commit through to their _Rec clips).
+	var t_aar := AnimationNodeStateMachineTransition.new()
+	t_aar.xfade_time = attack_chain_xfade
+	t_aar.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_AUTO
+	sm.add_transition("Attack_A", "Attack_A_Rec", t_aar)
+	var t_bbr := AnimationNodeStateMachineTransition.new()
+	t_bbr.xfade_time = attack_chain_xfade
+	t_bbr.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_AUTO
+	sm.add_transition("Attack_B", "Attack_B_Rec", t_bbr)
+	# Recovery -> next hit (code-driven combo continuation, wired for next task).
+	var t_arb := AnimationNodeStateMachineTransition.new()
+	t_arb.xfade_time = attack_chain_xfade
+	t_arb.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Attack_A_Rec", "Attack_B", t_arb)
+	var t_brc := AnimationNodeStateMachineTransition.new()
+	t_brc.xfade_time = attack_chain_xfade
+	t_brc.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	sm.add_transition("Attack_B_Rec", "Attack_C", t_brc)
+	# Recovery/finisher AUTO-settle back to Idle if uncancelled.
+	var t_ari := AnimationNodeStateMachineTransition.new()
+	t_ari.xfade_time = attack_settle_xfade
+	t_ari.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_AUTO
+	sm.add_transition("Attack_A_Rec", "Idle", t_ari)
+	var t_bri := AnimationNodeStateMachineTransition.new()
+	t_bri.xfade_time = attack_settle_xfade
+	t_bri.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_AUTO
+	sm.add_transition("Attack_B_Rec", "Idle", t_bri)
+	var t_ci := AnimationNodeStateMachineTransition.new()
+	t_ci.xfade_time = attack_settle_xfade
+	t_ci.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_AUTO
+	sm.add_transition("Attack_C", "Idle", t_ci)
 	_anim_tree.tree_root = sm
 	_anim_tree.active = true
 	_state_machine = _anim_tree.get("parameters/playback")
 	_state_machine.start("Idle")
-	_anim.animation_finished.connect(_on_animation_finished)
 	var env_node := get_tree().current_scene.get_node("WorldEnvironment")
 	if env_node and env_node is WorldEnvironment:
 		var env: Environment = env_node.environment
@@ -187,7 +248,7 @@ func _process_grounded(delta: float) -> void:
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
 		_current_state = State.AIRBORNE
-	if Input.is_action_just_pressed("attack_light") and _current_state == State.GROUNDED:
+	if Input.is_action_just_pressed("attack_light") and _current_state == State.GROUNDED and is_on_floor():
 		_enter_attack()
 
 func _process_airborne(delta: float) -> void:
@@ -200,12 +261,15 @@ func _process_airborne(delta: float) -> void:
 func _process_attacking(_delta: float) -> void:
 	velocity.x = 0
 	velocity.z = 0
+	var node := _state_machine.get_current_node()
+	if node == "Idle" or node == "Walk" or node == "Sprint":
+		_current_state = State.GROUNDED
 
 func _enter_attack() -> void:
 	_current_state = State.ATTACKING
 	velocity.x = 0
 	velocity.z = 0
-	_anim.play("ual1/Sword_Attack", 0.15)
+	_state_machine.travel("Attack_A")
 
 func _update_animation_conditions() -> void:
 	match _current_state:
@@ -242,7 +306,3 @@ func _update_animation_conditions() -> void:
 			var node := _state_machine.get_current_node()
 			if velocity.y > 0.0 and node != "Jump_Start" and node != "Jump":
 				_state_machine.travel("Jump_Start")
-
-func _on_animation_finished(_anim_name: StringName) -> void:
-	if _current_state == State.ATTACKING:
-		_current_state = State.GROUNDED
