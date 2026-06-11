@@ -23,12 +23,12 @@ enum State { GROUNDED, AIRBORNE, ATTACKING }
 @export var attack_chain_xfade: float = 0.1    # Attack_A->Rec->Attack_B->Rec->Attack_C
 @export var attack_settle_xfade: float = 0.15  # Rec/Attack_C -> Idle (AUTO)
 @export var chain_window_open: float = 0.25    # secs into a _Rec clip before a queued attack chains
+@export var root_motion_scale: float = 1.0     # multiplier on extracted attack root motion
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _current_state: State = State.GROUNDED
 var _landing_started_ms: int = -1    # Time.get_ticks_msec() at landing; -1 = not landing
 var _attack_queued: bool = false
-var _launch_log_frame: int = 0    # TEMP TRACE -- launch logging counter
 var _camera_pivot: Node3D
 var _mesh_pivot: Node3D
 var _anim: AnimationPlayer
@@ -50,6 +50,7 @@ func _ready() -> void:
 	# in the .tscn — Godot strips AnimationTree sub-resource state on Ctrl+S.
 	_anim_tree = $AnimTree
 	_anim_tree.anim_player = _anim_tree.get_path_to(_anim)
+	_anim_tree.root_motion_track = NodePath("%GeneralSkeleton:Root")
 	var sm := AnimationNodeStateMachine.new()
 	var idle_node := AnimationNodeAnimation.new()
 	idle_node.animation = "ual1/Idle"
@@ -59,11 +60,11 @@ func _ready() -> void:
 	sm.add_node("Walk", walk_node)
 	var t_iw := AnimationNodeStateMachineTransition.new()
 	t_iw.xfade_time = locomotion_xfade
-	t_iw.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	t_iw.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Idle", "Walk", t_iw)
 	var t_wi := AnimationNodeStateMachineTransition.new()
 	t_wi.xfade_time = locomotion_xfade
-	t_wi.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	t_wi.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Walk", "Idle", t_wi)
 	var sprint_node := AnimationNodeAnimation.new()
 	sprint_node.animation = "ual1/Sprint"
@@ -80,32 +81,32 @@ func _ready() -> void:
 	# Locomotion cross-transitions (code-driven via travel()).
 	var t_is := AnimationNodeStateMachineTransition.new()
 	t_is.xfade_time = locomotion_xfade
-	t_is.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	t_is.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Idle", "Sprint", t_is)
 	var t_si := AnimationNodeStateMachineTransition.new()
 	t_si.xfade_time = locomotion_xfade
-	t_si.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	t_si.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Sprint", "Idle", t_si)
 	var t_ws := AnimationNodeStateMachineTransition.new()
 	t_ws.xfade_time = locomotion_xfade
-	t_ws.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	t_ws.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Walk", "Sprint", t_ws)
 	var t_sw := AnimationNodeStateMachineTransition.new()
 	t_sw.xfade_time = locomotion_xfade
-	t_sw.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	t_sw.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Sprint", "Walk", t_sw)
 	# Jump entry from any ground state (code-driven).
 	var t_ijs := AnimationNodeStateMachineTransition.new()
 	t_ijs.xfade_time = jump_entry_xfade
-	t_ijs.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	t_ijs.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Idle", "Jump_Start", t_ijs)
 	var t_wjs := AnimationNodeStateMachineTransition.new()
 	t_wjs.xfade_time = jump_entry_xfade
-	t_wjs.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	t_wjs.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Walk", "Jump_Start", t_wjs)
 	var t_sjs := AnimationNodeStateMachineTransition.new()
 	t_sjs.xfade_time = jump_entry_xfade
-	t_sjs.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	t_sjs.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Sprint", "Jump_Start", t_sjs)
 	# Jump chain (code-driven; Jump_Start is committed through to Jump).
 	var t_jsj := AnimationNodeStateMachineTransition.new()
@@ -114,7 +115,7 @@ func _ready() -> void:
 	sm.add_transition("Jump_Start", "Jump", t_jsj)
 	var t_jjl := AnimationNodeStateMachineTransition.new()
 	t_jjl.xfade_time = jump_chain_xfade
-	t_jjl.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	t_jjl.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Jump", "Jump_Land", t_jjl)
 	# Landing: AUTO-settles to Idle if uninterrupted. The Walk/Sprint/Jump_Start
 	# edges are cancel paths reached by code travel() when input is present.
@@ -124,15 +125,15 @@ func _ready() -> void:
 	sm.add_transition("Jump_Land", "Idle", t_jli)
 	var t_jlw := AnimationNodeStateMachineTransition.new()
 	t_jlw.xfade_time = landing_cancel_xfade
-	t_jlw.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	t_jlw.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Jump_Land", "Walk", t_jlw)
 	var t_jls := AnimationNodeStateMachineTransition.new()
 	t_jls.xfade_time = landing_cancel_xfade
-	t_jls.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	t_jls.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Jump_Land", "Sprint", t_jls)
 	var t_jljs := AnimationNodeStateMachineTransition.new()
 	t_jljs.xfade_time = landing_cancel_xfade
-	t_jljs.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED
+	t_jljs.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Jump_Land", "Jump_Start", t_jljs)
 	# Attack subgraph (UAL2 Regular sword combo, code-driven via travel()).
 	var attack_a_node := AnimationNodeAnimation.new()
@@ -200,12 +201,6 @@ func _ready() -> void:
 	_anim_tree.active = true
 	_state_machine = _anim_tree.get("parameters/playback")
 	_state_machine.start("Idle")
-	# TEMP TRACE -- remove after combo_trace investigation
-	if not DirAccess.dir_exists_absolute("res://tmp"):
-		DirAccess.make_dir_absolute("res://tmp")
-	var init_file := FileAccess.open("res://tmp/combo_trace.txt", FileAccess.WRITE)
-	init_file.close()  # truncate every run
-	# END TEMP TRACE
 	var env_node := get_tree().current_scene.get_node("WorldEnvironment")
 	if env_node and env_node is WorldEnvironment:
 		var env: Environment = env_node.environment
@@ -223,11 +218,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 func _physics_process(delta: float) -> void:
-	# TEMP TRACE -- unconditional launch logging, first 120 physics frames
-	if _launch_log_frame < 120:
-		_trace_combo("frame=%d state=%s node=%s playing=%s" % [_launch_log_frame, _current_state, _state_machine.get_current_node(), _state_machine.is_playing()])
-		_launch_log_frame += 1
-	# END TEMP TRACE
 	if _current_state == State.ATTACKING and Input.is_action_just_pressed("attack_light"):
 		_attack_queued = true
 	if not is_on_floor():
@@ -276,21 +266,18 @@ func _process_airborne(delta: float) -> void:
 		_state_machine.travel("Jump_Land")
 		_landing_started_ms = Time.get_ticks_msec()
 
-func _process_attacking(_delta: float) -> void:
-	velocity.x = 0
-	velocity.z = 0
+func _process_attacking(delta: float) -> void:
+	var rm: Vector3 = _anim_tree.get_root_motion_position()
+	var rm_world: Vector3 = _mesh_pivot.global_transform.basis * rm * root_motion_scale
+	velocity.x = rm_world.x / delta
+	velocity.z = rm_world.z / delta
 	var node := _state_machine.get_current_node()
-	# TEMP TRACE -- remove after combo_trace investigation
-	_trace_combo("node=%s pos=%s len=%s queued=%s" % [node, _state_machine.get_current_play_position(), _state_machine.get_current_length(), _attack_queued])
-	# END TEMP TRACE
 	if node == "Attack_A_Rec" and _attack_queued and _state_machine.get_current_play_position() >= chain_window_open:
 		_attack_queued = false
 		_state_machine.travel("Attack_B")
-		_trace_combo("TRAVEL->Attack_B")  # TEMP TRACE
 	elif node == "Attack_B_Rec" and _attack_queued and _state_machine.get_current_play_position() >= chain_window_open:
 		_attack_queued = false
 		_state_machine.travel("Attack_C")
-		_trace_combo("TRAVEL->Attack_C")  # TEMP TRACE
 	elif (node == "Attack_A_Rec" or node == "Attack_B_Rec" or node == "Attack_C") and \
 			_state_machine.get_current_play_position() >= _state_machine.get_current_length() - attack_settle_xfade:
 		_attack_queued = false
@@ -306,13 +293,6 @@ func _enter_attack() -> void:
 	_attack_queued = false
 	_state_machine.travel("Attack_A")
 
-# TEMP TRACE -- remove after combo_trace investigation
-func _trace_combo(line: String) -> void:
-	var f := FileAccess.open("res://tmp/combo_trace.txt", FileAccess.READ_WRITE)
-	f.seek_end()
-	f.store_line(line)
-# END TEMP TRACE
-
 func _update_animation_conditions() -> void:
 	match _current_state:
 		State.GROUNDED:
@@ -324,7 +304,7 @@ func _update_animation_conditions() -> void:
 				(Time.get_ticks_msec() - _landing_started_ms) < int(landing_protect_window * 1000.0)
 			if _landing_started_ms >= 0 and not in_landing_protect:
 				_landing_started_ms = -1  # window expired: one-shot, re-arm on next landing
-			var moving := velocity.length() > walk_threshold
+			var moving := Vector2(velocity.x, velocity.z).length() > walk_threshold
 			var sprinting := Input.is_action_pressed("sprint") and moving
 			if sprinting:
 				if not in_landing_protect and _state_machine.get_current_node() != "Sprint":
