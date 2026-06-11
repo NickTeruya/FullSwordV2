@@ -198,12 +198,6 @@ output via FileAccess to res://tmp/ was the reliable debug channel.
   gained.
 - MCP capability audit deferred -- never blocked progress this session.
 
-Write a PowerShell here-string script to tmp/session3_notes.ps1 that
-appends the following to SESSION_NOTES.md. Use plain ASCII hyphens
-only -- no em dashes, no smart quotes.
-
----
-
 ## Session 3 -- State Machine, Camera System, Combat Foundation
 
 **Outcome:** Inner-layer state machine (Grounded/Attacking) working.
@@ -279,38 +273,6 @@ rotates to face movement direction.
 - AnimationTree crossfade
 - Dodge state with i-frames
 - HitArea3D/HurtArea3D wiring
-Task: Edit CLAUDE.md. Read first.
-
-Add a new section after the "Conventions" section, before "Verification":
-
-## Known Engine Behavior
-
-### .tscn sub-resource properties silently ignored at runtime
-
-Godot's scene loader does not reliably apply sub-resource property
-values from .tscn files in all cases. Confirmed occurrences:
-
-- Session 2: AnimationTree active, transitions, and source_node
-  properties stripped on Ctrl+S in editor.
-- Session 4: Environment background_mode, background_color, and
-  ProceduralSkyMaterial colors present on disk but rendered with
-  default values at runtime. D3D12 + AMD RX 6900 XT on Godot 4.6.3.
-
-**Convention:** When a .tscn sub-resource property does not take effect
-despite being correct on disk, set it in _ready() via script. Use
-@export vars so the values remain Inspector-tunable. This is the
-reliable path — .tscn serialization is the fallback, not the
-source of truth.
-
-### ProceduralSkyMaterial does not render on D3D12
-
-ProceduralSkyMaterial sky renders black on D3D12 12_0 with AMD
-Radeon RX 6900 XT in Godot 4.6.3. Background mode Color (BG_COLOR)
-works. Workaround: set background_mode = Environment.BG_COLOR in
-_ready(). Investigate Vulkan as alternative renderer in a future
-session.
-
-Success condition: read back the new section.
 
 ## Session 5 -- Animation Pipeline Migration and Locomotion Through AnimationTree
 
