@@ -73,3 +73,6 @@ session.
 - Prefer the simpler Godot-native solution over a clever custom one
 - Web search after 2 failed diagnostic loops — do not attempt a third
   without new information
+
+## Session Bootstrap
+At the start of every session, read SESSION_STATE.md before any other work.

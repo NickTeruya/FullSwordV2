@@ -131,15 +131,15 @@ not mid-execution. A work graph beats a work list.
 
 ### Code Words
 
-**`wrap session`** — triggers the session-close ritual. Produces three
+**`wrap session`** — triggers the session-close ritual. Produces two
 deliverables and nothing else:
 1. A Claude Code prompt to append session notes to SESSION_NOTES.md
-2. A startup prompt for the next chat session (Claude.ai)
-3. A Claude Code bootstrap script for the next session — saved as a
-   markdown file to /mnt/user-data/outputs/. Contains project state,
-   session goal, ground rules, and explicit DO NOT TOUCH list.
+2. A Claude Code prompt to overwrite SESSION_STATE.md with:
+   - Session number (increment by 1)
+   - Last Completed: 2-4 sentences on what works, what was committed,
+     what state the code is in. Plain ASCII hyphens only.
 
-No summary prose. No extra commentary. Just those three deliverables.
+No summary prose. No extra commentary. Just those two deliverables.
 
 ### Starting a New Chat Session
 
