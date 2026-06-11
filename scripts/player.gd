@@ -1,5 +1,7 @@
 extends CharacterBody3D
 
+signal stamina_changed(current: float, maximum: float)
+
 enum State { GROUNDED, AIRBORNE, ATTACKING }
 
 @export_group("Movement")
@@ -34,10 +36,17 @@ enum State { GROUNDED, AIRBORNE, ATTACKING }
 @export_group("Environment")
 @export var background_color: Color = Color(0.25, 0.45, 0.9, 1.0)
 
+@export_group("Stamina")
+@export var max_stamina: float = 100.0
+@export var stamina_regen_rate: float = 25.0      # stamina per second when regenerating
+@export var stamina_regen_delay: float = 0.5      # secs after last drain before regen starts
+
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _current_state: State = State.GROUNDED
 var _landing_started_ms: int = -1    # Time.get_ticks_msec() at landing; -1 = not landing
 var _attack_queued: bool = false
+var _current_stamina: float = max_stamina
+var _last_drain_ms: int = -1    # Time.get_ticks_msec() at last stamina drain; -1 = never drained
 var _camera_pivot: Node3D
 var _mesh_pivot: Node3D
 var _anim: AnimationPlayer
@@ -215,6 +224,12 @@ func _ready() -> void:
 		var env: Environment = env_node.environment
 		env.background_mode = Environment.BG_COLOR
 		env.background_color = background_color
+	_current_stamina = max_stamina
+	var stamina_bar: ProgressBar = get_node_or_null("HUD/StaminaBar")
+	if is_instance_valid(stamina_bar):
+		stamina_bar.max_value = max_stamina
+		stamina_bar.value = _current_stamina
+		stamina_changed.connect(stamina_bar._on_stamina_changed)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
@@ -225,6 +240,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		$CameraPivot/CameraArm.rotation = arm_rotation
 	if event.is_action_pressed("ui_cancel"):
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	# TEMPORARY DEBUG: drain stamina to test the pool. Remove when block state drives drain.
+	if event is InputEventKey and event.keycode == KEY_P and event.pressed and not event.echo:
+		_drain_stamina(30.0)
 
 func _physics_process(delta: float) -> void:
 	if _current_state == State.ATTACKING and Input.is_action_just_pressed("attack_light"):
@@ -243,6 +261,7 @@ func _physics_process(delta: float) -> void:
 			_process_airborne(delta)
 		State.ATTACKING:
 			_process_attacking(delta)
+	_update_stamina(delta)
 	move_and_slide()
 	_update_animation_conditions()
 
@@ -337,3 +356,19 @@ func _update_animation_conditions() -> void:
 			var node := _state_machine.get_current_node()
 			if velocity.y > 0.0 and node != "Jump_Start" and node != "Jump":
 				_state_machine.travel("Jump_Start")
+
+func _update_stamina(delta: float) -> void:
+	if _current_stamina < max_stamina:
+		var regen_ready := _last_drain_ms < 0 or \
+			(Time.get_ticks_msec() - _last_drain_ms) >= int(stamina_regen_delay * 1000.0)
+		if regen_ready:
+			_current_stamina = minf(max_stamina, _current_stamina + stamina_regen_rate * delta)
+			stamina_changed.emit(_current_stamina, max_stamina)
+
+func _drain_stamina(amount: float) -> bool:
+	if _current_stamina <= 0.0:
+		return false
+	_current_stamina = maxf(0.0, _current_stamina - amount)
+	_last_drain_ms = Time.get_ticks_msec()
+	stamina_changed.emit(_current_stamina, max_stamina)
+	return true
