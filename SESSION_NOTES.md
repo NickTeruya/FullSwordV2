@@ -311,3 +311,119 @@ _ready(). Investigate Vulkan as alternative renderer in a future
 session.
 
 Success condition: read back the new section.
+
+## Session 5 -- Animation Pipeline Migration and Locomotion Through AnimationTree
+
+**Outcome:** Full migration from two-skeleton pose-copy workaround to native
+single-skeleton AnimationLibrary pipeline. AnimationTree live with all locomotion
+states (Idle/Walk/Sprint/Jump subgraph) driven by code-via travel(). Character
+animates with tuned feel. Combat animations ready but not yet wired.
+
+### What Was Done
+
+**Animation pipeline migrated (the foundational work)**
+- UAL1.glb and UAL2.glb reimported as Animation Library (was: Scene). BoneMap
+  and SkeletonProfileHumanoid retarget survived the mode switch on both.
+- UAL1 instance removed from player.tscn. _copy_pose() deleted from player.gd.
+  _src_skeleton binding removed. The two-skeleton workaround is fully gone.
+- New AnimationPlayer named CharacterAnimPlayer added as direct child of Player
+  (sibling of MeshPivot -- character-agnostic placement, enables future
+  swappable character models and skins).
+- Both libraries loaded in _ready() under named namespaces: "ual1" and "ual2".
+  Clips addressed as ual1/Idle, ual2/Sword_Regular_A, etc. Named libraries
+  chosen over merged namespace to prevent future clip-name collisions when
+  adding packs.
+- root_node set in _ready() to the Superhero instance so percent-sign
+  GeneralSkeleton unique-name tracks resolve. Proved empirically via probe
+  script before implementation.
+
+**AnimationTree live**
+- AnimTree node added bare to player.tscn; all runtime state (tree_root,
+  anim_player, active, state machine build) set in _ready() per the
+  destructive-save rule (CLAUDE.md known behavior).
+- AnimationNodeStateMachine built entirely in code. States: Idle, Walk, Sprint,
+  Jump_Start, Jump, Jump_Land.
+- Transition mechanism: travel() called from gameplay code (ADVANCE_MODE_DISABLED
+  on all transitions except the two noted below). Gameplay drives the tree;
+  tree never drives state. This is the pattern for all future states including
+  combat.
+- Auto-advance exceptions (legitimate uses only):
+    Jump_Start->Jump: auto-advance so Jump_Start plays to natural completion
+    before flowing to the fall loop (code-driven apex check caused pre-play snap).
+    Jump_Land->Idle: auto-advance so uninterrupted landing settles to neutral.
+- Cancellable landing implemented: land while moving plays Jump_Land for a
+  protect window before move-cancel is allowed. Animation-only -- movement
+  never interrupted. landing_protect_window = 0.12 (tunable live via @export
+  since it is read each frame, not baked at _ready()).
+
+**Feel tuning**
+- All transition xfade times exposed as @export grouped by category:
+  locomotion_xfade, jump_entry_xfade, jump_chain_xfade, landing_cancel_xfade,
+  landing_settle_xfade. Defaults all 0.15. xfade values baked at _ready() --
+  require F5 to apply after Inspector edit.
+- Tuned values that felt good: locomotion_xfade = 0.25, jump_chain_xfade = 0.25,
+  landing_protect_window = 0.12.
+- Walk/Sprint shoulder snap: locomotion_xfade 0.15->0.25 fixed it.
+- Jump apex snap: raising jump_chain_xfade had no effect (blend time was not the
+  cause). Fix was switching Jump_Start->Jump to auto-advance -- the code-driven
+  apex check fired before Jump_Start visually played, so there was no pose to
+  blend from. Timing was the cause, not blend length.
+- Landing while moving snap: landing_protect_window suppresses Walk/Sprint travel
+  for 0.12s after touchdown. Jump_Land now reads on moving landings. Arms no
+  longer snap from fall pose to run pose.
+
+**New conventions established this session**
+- travel() frame-ordering idiom: last travel() in a frame wins. Guard travel
+  calls with get_current_node() checks against states where the travel is valid.
+  This pattern applies to all future combat cancel windows.
+- Auto-advance is permitted only for one-shot-returns-to-neutral (animation
+  finishing IS the transition). All reactive transitions are code-driven travel().
+- AnimationPlayer lives at Player level, not inside the character mesh instance.
+  This makes the rig character-agnostic -- future character model swaps only
+  require changing the mesh in the slot and re-pointing the skeleton path.
+- Skin swapping is a separate axis from character-model swapping (documented in
+  skin_remap_design.md). Both are enabled by the shared SkeletonProfileHumanoid
+  contract.
+
+**ANIMATION_PIPELINE.md**
+- Written as artifact in Session 5 chat. NOT YET IN REPO.
+- Must be written to docs/ANIMATION_PIPELINE.md at Session 6 start before any
+  other work. Content includes: core principle, import rules per asset type,
+  target runtime scene structure, AnimationTree conventions, root motion payoff,
+  plug-and-play test, migration checklist, known risks, and the Session 5
+  conventions listed above.
+
+### Key Decisions
+
+- Named libraries (ual1/, ual2/) over merged namespace: prevents clip-name
+  collisions when adding future animation packs. Explicit source at every call
+  site. AnimationTree state machine nodes use the same namespacing.
+- CharacterAnimPlayer at Player level (not inside Superhero instance): enables
+  character-model swapping without rebuilding animation rig. Skins swap
+  independently via the shared skeleton contract.
+- Jump_Start->Jump auto-advance: Jump_Start is a committed one-shot that always
+  leads to Jump. Animation finishing IS the transition. Code-driving it caused
+  apex-timing snap that xfade tuning could not fix.
+- Cancellable landing with protect window: land while moving = Jump_Land plays
+  briefly, then blends to locomotion. Animation-only (no movement lockout).
+  Matches agency-density pillar in V2_ARCHITECTURE.
+
+### What's Deferred
+
+- UAL2 Sword_Regular_A/B/C combo -- Session 6 primary goal
+- Root motion on attacks (AnimationTree now supports it natively -- the Sandfire
+  weight payoff)
+- Input buffering system (V2_ARCHITECTURE feel system)
+- Cancel windows (V2_ARCHITECTURE feel system -- travel() idiom established,
+  ready to implement)
+- HitArea3D/HurtArea3D dummy for hit detection testing
+- Dodge state with i-frames
+- Live-tuning rebuild hook for xfade values (baked at _ready(); F5 required per
+  change -- acceptable for now, revisit when combat tuning starts)
+- ANIMATION_PIPELINE.md write to repo -- Session 6 first task
+
+### Session 5 Commit Tags
+
+- s5-single-skeleton-pipeline: migration off pose-copy workaround
+- s5-locomotion-animationtree: full locomotion through AnimationTree with tuned
+  feel
