@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://d3itqspq3kgg5"]
 
 [ext_resource type="PackedScene" uid="uid://cbx10fh6k6enb" path="res://scenes/player.tscn" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/dummy.tscn" id="2"]
 
 [sub_resource type="BoxShape3D" id="1"]
 size = Vector3(20, 0.5, 20)
@@ -29,6 +30,9 @@ tonemap_mode = 2
 
 [node name="Player" parent="." unique_id=1781697647 instance=ExtResource("1")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+
+[node name="Dummy" parent="." instance=ExtResource("2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -5)
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.7071068, 0.7071068, 0, -0.7071068, 0.7071068, 0, 10, 0)
