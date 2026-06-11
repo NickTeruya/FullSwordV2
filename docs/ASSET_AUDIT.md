@@ -101,7 +101,7 @@ See docs/ANIMATION_PIPELINE.md for the full pipeline design.
 
 ### UAL2.glb (Source tier, purchased)
 - Source: quaternius.itch.io/universal-animation-library
-- Rig: Humanoid. BoneMap + SkeletonProfileHumanoid configured (Session 1).
+- Rig: Humanoid. BoneMap + SkeletonProfileHumanoid configured (Session 1); BoneMap silently lost during Session 5 import-mode switch to Animation Library -- re-confirmed Session 6. Root slot (bottom of profile) verified populated. Green-track check passes without Root slot; verify manually.
 - Import mode: Animation Library (changed from Scene at Session 5).
   Clips load as a retargeted AnimationLibrary -- no mesh, no skeleton.
 - Clip count: 135

@@ -159,29 +159,59 @@ AnimationTree drives the visuals. Never the reverse (V2_ARCHITECTURE).
 
 ## Transition Mechanism: travel() vs Auto-Advance
 
-**Default rule: code-driven travel() via ADVANCE_MODE_DISABLED.**
+**Default rule: code-driven travel() via ADVANCE_MODE_ENABLED.**
 
-The gameplay state machine calls travel() when it decides a state should
-change. The tree executes the blended transition. The decision stays in
-gameplay code; the tree is the visual blend layer.
+ADVANCE_MODE_ENABLED means the transition is only usable by travel() --
+it never fires on its own. ADVANCE_MODE_DISABLED means the transition
+does not exist as far as travel() is concerned -- pathfinding skips it
+entirely. ADVANCE_MODE_AUTO fires every frame when its condition is true.
+
+The three modes in plain terms:
+- ENABLED: travel()-only. Use for all reactive, code-driven transitions.
+- DISABLED: unusable. Do not use -- set ENABLED and gate in code instead.
+- AUTO: self-firing. Use only for one-shot-returns-to-neutral (see below).
 
     var node := _state_machine.get_current_node()
     if node != "Walk":
         _state_machine.travel("Walk")
 
-**Auto-advance (ADVANCE_MODE_AUTO) is permitted only for one-shot
-returns to neutral**, where the animation finishing IS the state
-transition -- not a reaction to input. Current uses:
+**Auto-advance (ADVANCE_MODE_AUTO) is permitted only for two categories:**
 
-- Jump_Start -> Jump: Jump_Start is a committed launch that always leads
-  to the fall loop. Code-driving this on the apex check caused a snap
-  because the check fired before Jump_Start visually played (no pose to
-  blend from). Auto-advance lets Jump_Start play to natural completion.
-- Jump_Land -> Idle: uninterrupted landing settles to neutral on its own.
-  Player input via travel() overrides it if present.
+1. One-shot committed flows where the animation finishing IS the
+   transition -- not a reaction to input:
+   - Jump_Start -> Jump: auto-advance so Jump_Start plays to natural
+     completion before entering the fall loop.
+   - Jump_Land -> Idle: uninterrupted landing settles to neutral.
 
-Auto-advance is NOT used for reactive transitions (locomotion changes,
-attack entry, cancel windows, dodge). Those are always travel().
+2. Committed attack swings flowing into their recovery clips:
+   - Attack_A -> Attack_A_Rec, Attack_B -> Attack_B_Rec: the swing is
+     a committed one-shot; recovery always follows. Use SWITCH_MODE_AT_END
+     so the swing plays fully before the recovery begins. SWITCH_MODE_AUTO
+     (immediate) fires on entry and truncates the swing.
+
+Attack _Rec clips are NOT one-shot returns to neutral -- they are
+decision points (chain or settle). Their exits are code-driven ENABLED
+transitions, not AUTO. See cancel-window pattern below.
+
+Auto-advance is NOT used for: locomotion changes, attack entry, cancel
+windows, dodge, or any _Rec exits. Those are always travel().
+
+**CRITICAL -- transition topology and travel() pathfinding:**
+
+travel() uses A* to find the shortest path of ENABLED transitions from
+the current node to the target. It plays every intermediate node on the
+path. If the only ENABLED route from Walk to Idle passes through
+Attack_A, travel("Idle") will play the full attack animation.
+
+Rules that prevent phantom transitions:
+- Every node must have a direct ENABLED path to every node it legitimately
+  needs to reach without passing through unrelated states.
+- DISABLED transitions are invisible to pathfinding -- they cannot cause
+  phantom paths, but they also cannot be used for travel(). Never use
+  DISABLED as a "dormant but available" state; use ENABLED.
+- When building a new subgraph (attack states, dodge states, etc.),
+  immediately add direct ENABLED exits back to all locomotion states.
+  Omitting these exits forces travel() to route through the subgraph.
 
 ---
 
@@ -283,17 +313,54 @@ independently.
 ## Root Motion (the combat payoff)
 
 With AnimationTree owning a real single-skeleton player, committed
-attacks use root motion natively:
+attacks use root motion natively. The character physically moves through
+the strike -- the Sandfire feel reference.
 
-- Set the AnimationTree root motion track to the skeleton's root bone.
-- Read AnimationTree.get_root_motion_position() each frame during an
-  attack state and feed it into CharacterBody3D velocity before
-  move_and_slide().
+### Setup (required, in _ready() before active = true)
 
-This is what makes heavy swings lean into the strike (the Sandfire feel
-reference). It was impossible under the pose-copy workaround. It is
-available now. Root motion is the primary reason the pipeline migration
-was the right Session 5 investment before building combat.
+    _anim_tree.root_motion_track = NodePath("%GeneralSkeleton:Root")
+
+Track path notes:
+- Capital R on "Root" -- the BoneMap maps the source rig's "root" bone
+  to the profile slot named "Root". Retargeted tracks use the profile
+  name. Case-sensitive: "root" returns zero every frame silently.
+- The BoneMap Root slot (the circle at the bottom-center of the profile
+  silhouette in Advanced Import Settings) must be populated. It is NOT
+  auto-mapped by the green-track check -- the green-check passes without
+  it. Verify manually: Root slot shows "root" in the bone picker.
+  If empty, root motion extraction returns (0, 0, 0) with no error.
+- Set on the AnimationTree, not the AnimationPlayer. AnimationTree
+  extends AnimationMixer and syncs root_node from the assigned
+  anim_player -- do not set root_node separately on the tree.
+
+### Extraction and application (in _process_attacking())
+
+    var rm: Vector3 = _anim_tree.get_root_motion_position()
+    var rm_world: Vector3 = _mesh_pivot.global_transform.basis * rm * root_motion_scale
+    velocity.x = rm_world.x / delta
+    velocity.z = rm_world.z / delta
+    # Do NOT touch velocity.y -- gravity code owns it
+
+Key points:
+- get_root_motion_position() returns a per-frame delta in animation-local
+  space, not velocity. Divide by delta for move_and_slide() compatibility.
+- Rotate by _mesh_pivot.global_transform.basis to convert animation-local
+  forward into world-space facing direction. Without this rotation, every
+  attack lunges in a fixed world direction regardless of character facing.
+- Apply x/z only. Gravity owns y; attacks off ledges fall correctly.
+- root_motion_scale is an @export float (default 1.0) applied before
+  division. Read live each frame -- Inspector edits take effect
+  immediately without F5. 1.0 is the animator's intent; tune from there.
+- When root_motion_track is set, the engine strips the root translation
+  from the visual mesh AND returns it from get_root_motion_position().
+  If extraction is misconfigured (wrong track path, empty BoneMap Root
+  slot), the translation leaks through visually as a slide-and-snap
+  with (0, 0, 0) returned from the extraction call.
+
+### Confirmed working (Session 6)
+- UAL2 Sword_Regular_A/B/C all carry root motion on %GeneralSkeleton:Root
+- CharacterBody3D advances through attacks; camera follows
+- Character falls off ledges mid-combo as expected
 
 ---
 
@@ -328,3 +395,17 @@ the project. Compatibility is enforced at the asset-acquisition gate.
   point at the Superhero instance root. If root_node is wrong or unset,
   the result is a T-pose with no error thrown. Confirmed working in
   Session 5 through the editable-instance boundary.
+- BoneMap Root slot is not verified by the green-track check: the auto-
+  mapper leaves it empty and the green canary still passes. Verify the
+  Root slot (bottom-center of profile silhouette) manually for every
+  animation asset. Empty Root slot = get_root_motion_position() returns
+  (0, 0, 0) silently with no error.
+- ADVANCE_MODE_DISABLED makes transitions invisible to travel()
+  pathfinding -- they cannot be traveled and cannot cause phantom paths.
+  ADVANCE_MODE_ENABLED is the correct mode for code-driven transitions.
+  Never use DISABLED as "dormant but available."
+- Transition topology creates phantom travel() paths: if the only ENABLED
+  route between two locomotion states passes through attack states,
+  travel() plays the full attack animation silently. Ensure every node
+  has a direct ENABLED path to all legitimate targets. Symptoms: attack
+  animation plays with no input, usually on stop or on spawn.
