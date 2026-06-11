@@ -2,10 +2,30 @@
 
 [ext_resource type="Script" uid="uid://u2oftkdf8tpf" path="res://scripts/player.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://ddrka6sywpyb6" path="res://assets/characters/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf" id="2"]
+[ext_resource type="Script" path="res://scripts/stamina_bar.gd" id="3"]
 
 [sub_resource type="CapsuleShape3D" id="1"]
+radius = 0.5
+height = 2.0
+
+[sub_resource type="CapsuleShape3D" id="2"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="BoxShape3D" id="3"]
+size = Vector3(0.8, 0.8, 1.2)
+
+[sub_resource type="StandardMaterial3D" id="4"]
+transparency = 1
+shading_mode = 1
+albedo_color = Color(0, 1, 1, 0.5)
+
+[sub_resource type="BoxMesh" id="5"]
+size = Vector3(0.8, 0.8, 1.2)
 
 [node name="Player" type="CharacterBody3D" unique_id=295594602]
+collision_layer = 2
+collision_mask = 5
 script = ExtResource("1")
 locomotion_xfade = 0.25
 jump_chain_xfade = 0.25
@@ -28,8 +48,49 @@ spring_length = 5.0
 
 [node name="Superhero_Male_FullBody" parent="MeshPivot" unique_id=110819459 instance=ExtResource("2")]
 
+[node name="AttackHitArea3D" type="Area3D" parent="MeshPivot"]
+collision_layer = 8
+collision_mask = 16
+monitoring = true
+monitorable = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="MeshPivot/AttackHitArea3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0.9)
+shape = SubResource("3")
+
+[node name="DebugMesh" type="MeshInstance3D" parent="MeshPivot/AttackHitArea3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0.9)
+visible = false
+mesh = SubResource("5")
+surface_material_override/0 = SubResource("4")
+
 [node name="CharacterAnimPlayer" type="AnimationPlayer" parent="." unique_id=345344454]
 
 [node name="AnimTree" type="AnimationTree" parent="." unique_id=2132860031]
+
+[node name="HurtArea3D" type="Area3D" parent="."]
+collision_layer = 16
+collision_mask = 8
+monitoring = true
+monitorable = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="HurtArea3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("2")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="StaminaBar" type="ProgressBar" parent="HUD"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -36.0
+offset_right = 216.0
+offset_bottom = -16.0
+modulate = Color(0.2, 1, 0.3, 1)
+max_value = 100.0
+value = 100.0
+script = ExtResource("3")
 
 [editable path="MeshPivot/Superhero_Male_FullBody"]

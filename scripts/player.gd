@@ -2,7 +2,7 @@ extends CharacterBody3D
 
 signal stamina_changed(current: float, maximum: float)
 
-enum State { GROUNDED, AIRBORNE, ATTACKING }
+enum State { GROUNDED, AIRBORNE, ATTACKING, BLOCKING }
 
 @export_group("Movement")
 @export var speed: float = 5.0
@@ -41,28 +41,70 @@ enum State { GROUNDED, AIRBORNE, ATTACKING }
 @export var stamina_regen_rate: float = 25.0      # stamina per second when regenerating
 @export var stamina_regen_delay: float = 0.5      # secs after last drain before regen starts
 
+@export_group("Block")
+@export var block_entry_xfade: float = 0.12         # Idle <-> Block_Enter, Block_Enter/Hold -> Idle
+@export var block_hold_xfade: float = 0.08          # Block_Enter -> Block_Hold crossfade
+@export var block_peak_time: float = 0.50           # secs into Sword_Block where guard peaks; advance to hold here
+@export var block_move_speed: float = 1.5            # strafe speed while blocking (vs walk 5.0)
+@export var block_stamina_drain_rate: float = 15.0   # stamina/sec drained while block held
+@export var block_facing_lerp_speed: float = 12.0    # how fast mesh snaps to camera-forward on block
+@export var block_min_stamina_to_enter: float = 5.0  # minimum stamina required to start blocking
+
+@export_group("Collision")
+@export var move_capsule_radius: float = 0.5
+@export var move_capsule_height: float = 2.0
+@export var hurt_capsule_radius: float = 0.4
+@export var hurt_capsule_height: float = 1.8
+
+@export_group("Combat Damage")
+@export var light_attack_damage: float = 10.0
+
+@export_group("Hitbox Debug")
+@export var debug_draw_hitboxes: bool = true
+
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _current_state: State = State.GROUNDED
 var _landing_started_ms: int = -1    # Time.get_ticks_msec() at landing; -1 = not landing
 var _attack_queued: bool = false
 var _current_stamina: float = max_stamina
 var _last_drain_ms: int = -1    # Time.get_ticks_msec() at last stamina drain; -1 = never drained
+var _block_locked_out: bool = false   # true after stamina-break while RMB still held; cleared on release
 var _camera_pivot: Node3D
 var _mesh_pivot: Node3D
 var _anim: AnimationPlayer
 var _anim_tree: AnimationTree
 var _state_machine: AnimationNodeStateMachinePlayback
+var _attack_hitarea: Area3D
+var _attack_hitbox_debug: MeshInstance3D
 
 func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 	_camera_pivot = $CameraPivot
 	_mesh_pivot = $MeshPivot
+	_mesh_pivot.rotation.y = PI
 	_anim = $CharacterAnimPlayer
 	_anim.root_node = _anim.get_path_to($MeshPivot/Superhero_Male_FullBody)
+	# Apply collision capsule dimensions from exports (sub-resource values
+	# set in .tscn are unreliable per CLAUDE.md known-behavior; code is authoritative)
+	var _move_shape := $CollisionShape3D.shape as CapsuleShape3D
+	_move_shape.radius = move_capsule_radius
+	_move_shape.height = move_capsule_height
+	var _hurt_shape := $HurtArea3D/CollisionShape3D.shape as CapsuleShape3D
+	_hurt_shape.radius = hurt_capsule_radius
+	_hurt_shape.height = hurt_capsule_height
+	_attack_hitarea = $MeshPivot/AttackHitArea3D
+	_attack_hitbox_debug = $MeshPivot/AttackHitArea3D/DebugMesh
+	_attack_hitarea.monitoring = false
+	_attack_hitarea.area_entered.connect(_on_attack_hit)
 	var ual1_lib: AnimationLibrary = load("res://assets/animations/UAL1.glb")
 	var ual2_lib: AnimationLibrary = load("res://assets/animations/UAL2.glb")
 	_anim.add_animation_library("ual1", ual1_lib)
 	_anim.add_animation_library("ual2", ual2_lib)
+	# Build Sword_Block_Hold: freeze the guard peak pose from Sword_Block so Block_Hold holds it indefinitely.
+	var block_src: Animation = _anim.get_animation_library("ual2").get_animation("Sword_Block")
+	block_src.loop_mode = Animation.LOOP_NONE
+	var hold_anim: Animation = _make_freeze_frame_animation(block_src, block_peak_time)
+	_anim.get_animation_library("ual2").add_animation("Sword_Block_Hold", hold_anim)
 	# Build the locomotion state machine in code (libraries must already be
 	# added so the clip names resolve). Runtime tree state is set here, never
 	# in the .tscn — Godot strips AnimationTree sub-resource state on Ctrl+S.
@@ -215,6 +257,30 @@ func _ready() -> void:
 	t_ci.xfade_time = attack_settle_xfade
 	t_ci.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
 	sm.add_transition("Attack_C", "Idle", t_ci)
+	# Block subgraph: Block_Enter plays the raise; Block_Hold freezes the guard peak indefinitely.
+	# All advances are code-driven via travel(). Entry/exit always routes through Idle.
+	var block_enter_node := AnimationNodeAnimation.new()
+	block_enter_node.animation = "ual2/Sword_Block"
+	sm.add_node("Block_Enter", block_enter_node)
+	var block_hold_node := AnimationNodeAnimation.new()
+	block_hold_node.animation = "ual2/Sword_Block_Hold"
+	sm.add_node("Block_Hold", block_hold_node)
+	var t_ibe := AnimationNodeStateMachineTransition.new()
+	t_ibe.xfade_time = block_entry_xfade
+	t_ibe.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
+	sm.add_transition("Idle", "Block_Enter", t_ibe)
+	var t_beh := AnimationNodeStateMachineTransition.new()
+	t_beh.xfade_time = block_hold_xfade
+	t_beh.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
+	sm.add_transition("Block_Enter", "Block_Hold", t_beh)
+	var t_bei := AnimationNodeStateMachineTransition.new()
+	t_bei.xfade_time = block_entry_xfade
+	t_bei.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
+	sm.add_transition("Block_Enter", "Idle", t_bei)
+	var t_bhi := AnimationNodeStateMachineTransition.new()
+	t_bhi.xfade_time = block_entry_xfade
+	t_bhi.advance_mode = AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED
+	sm.add_transition("Block_Hold", "Idle", t_bhi)
 	_anim_tree.tree_root = sm
 	_anim_tree.active = true
 	_state_machine = _anim_tree.get("parameters/playback")
@@ -261,6 +327,8 @@ func _physics_process(delta: float) -> void:
 			_process_airborne(delta)
 		State.ATTACKING:
 			_process_attacking(delta)
+		State.BLOCKING:
+			_process_blocking(delta)
 	_update_stamina(delta)
 	move_and_slide()
 	_update_animation_conditions()
@@ -286,6 +354,12 @@ func _process_grounded(delta: float) -> void:
 		_current_state = State.AIRBORNE
 	if Input.is_action_just_pressed("attack_light") and _current_state == State.GROUNDED and is_on_floor():
 		_enter_attack()
+	if not Input.is_action_pressed("block"):
+		_block_locked_out = false
+	if Input.is_action_pressed("block") and not _block_locked_out \
+			and _current_stamina >= block_min_stamina_to_enter \
+			and _current_state == State.GROUNDED and is_on_floor():
+		_enter_block()
 
 func _process_airborne(delta: float) -> void:
 	_apply_movement(delta)
@@ -300,6 +374,8 @@ func _process_attacking(delta: float) -> void:
 	velocity.x = rm_world.x / delta
 	velocity.z = rm_world.z / delta
 	var node := _state_machine.get_current_node()
+	var blade_live := (node == "Attack_A" or node == "Attack_B" or node == "Attack_C")
+	_set_attack_hitbox_active(blade_live)
 	if node == "Attack_A_Rec" and _attack_queued and _state_machine.get_current_play_position() >= chain_window_open:
 		_attack_queued = false
 		_state_machine.travel("Attack_B")
@@ -312,6 +388,7 @@ func _process_attacking(delta: float) -> void:
 		_state_machine.travel("Idle")
 	elif node == "Idle" or node == "Walk" or node == "Sprint":
 		_attack_queued = false
+		_set_attack_hitbox_active(false)
 		_current_state = State.GROUNDED
 
 func _enter_attack() -> void:
@@ -320,6 +397,73 @@ func _enter_attack() -> void:
 	velocity.z = 0
 	_attack_queued = false
 	_state_machine.travel("Attack_A")
+
+func _set_attack_hitbox_active(active: bool) -> void:
+	_attack_hitarea.monitoring = active
+	_attack_hitbox_debug.visible = active and debug_draw_hitboxes
+
+func _make_freeze_frame_animation(source: Animation, sample_time: float) -> Animation:
+	# Single-key Animation holding source's pose at sample_time. Single-key tracks
+	# never advance, so the pose holds indefinitely with no loop seam.
+	var frozen := Animation.new()
+	frozen.length = 0.1
+	frozen.loop_mode = Animation.LOOP_LINEAR
+	var fallback_types: Array = []
+	for track_idx in source.get_track_count():
+		var track_type := source.track_get_type(track_idx)
+		var path := source.track_get_path(track_idx)
+		var new_track := frozen.add_track(track_type)
+		frozen.track_set_path(new_track, path)
+		match track_type:
+			Animation.TYPE_POSITION_3D:
+				frozen.position_track_insert_key(new_track, 0.0, source.position_track_interpolate(track_idx, sample_time))
+			Animation.TYPE_ROTATION_3D:
+				frozen.rotation_track_insert_key(new_track, 0.0, source.rotation_track_interpolate(track_idx, sample_time))
+			Animation.TYPE_SCALE_3D:
+				frozen.scale_track_insert_key(new_track, 0.0, source.scale_track_interpolate(track_idx, sample_time))
+			_:
+				if source.track_get_key_count(track_idx) > 0:
+					frozen.track_insert_key(new_track, 0.0, source.track_get_key_value(track_idx, source.track_get_key_count(track_idx) - 1))
+				fallback_types.append(track_type)
+	if not fallback_types.is_empty():
+		push_warning("Sword_Block_Hold: fallback branch hit for track types: %s" % str(fallback_types))
+	return frozen
+
+func _enter_block() -> void:
+	_current_state = State.BLOCKING
+	_state_machine.travel("Block_Enter")
+
+func _process_blocking(delta: float) -> void:
+	if not Input.is_action_pressed("block"):
+		_current_state = State.GROUNDED
+		_state_machine.travel("Idle")
+		return
+	_drain_stamina(block_stamina_drain_rate * delta)
+	if _current_stamina <= 0.0:
+		_block_locked_out = true
+		_current_state = State.GROUNDED
+		_state_machine.travel("Idle")
+		return
+	# Advance from the raise into the held guard pose at the peak timestamp.
+	# (Sword_Block reverts to idle after ~0.50s, so we freeze the peak rather than play through.)
+	if _state_machine.get_current_node() == "Block_Enter" \
+			and _state_machine.get_current_play_position() >= block_peak_time:
+		_state_machine.travel("Block_Hold")
+	# Lock facing to camera-forward (horizontal projection of camera -Z).
+	var cam_forward: Vector3 = -_camera_pivot.transform.basis.z
+	cam_forward.y = 0.0
+	cam_forward = cam_forward.normalized()
+	var target_facing := atan2(cam_forward.x, cam_forward.z)
+	_mesh_pivot.rotation.y = lerp_angle(_mesh_pivot.rotation.y, target_facing, block_facing_lerp_speed * delta)
+	# Camera-relative strafe, no facing change from movement direction.
+	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var direction := (_camera_pivot.transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
+	if direction:
+		velocity.x = direction.x * block_move_speed
+		velocity.z = direction.z * block_move_speed
+	else:
+		velocity.x = move_toward(velocity.x, 0, block_move_speed)
+		velocity.z = move_toward(velocity.z, 0, block_move_speed)
 
 func _update_animation_conditions() -> void:
 	match _current_state:
@@ -372,3 +516,10 @@ func _drain_stamina(amount: float) -> bool:
 	_last_drain_ms = Time.get_ticks_msec()
 	stamina_changed.emit(_current_stamina, max_stamina)
 	return true
+
+func _on_attack_hit(area: Area3D) -> void:
+	if area.get_parent() == self:
+		return
+	var target := area.get_parent()
+	if target.has_method("take_damage"):
+		target.take_damage(light_attack_damage)
