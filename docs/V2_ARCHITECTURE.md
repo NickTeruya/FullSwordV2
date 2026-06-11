@@ -162,6 +162,19 @@ This is the single most common reason indie action games feel stiff
 when they shouldn't. Adding it once at the input layer fixes every
 state transition simultaneously.
 
+Buffered actions are voided on interrupt. If the player is hit or
+staggered before a buffered input is consumed, the buffer is cleared --
+a queued attack must never fire after the character has already been
+hit and the player has seen it land. A newer input replaces an older
+queued one rather than queuing behind it (newer-input priority). For
+hold-to-cancel states like block, a quick tap-and-release voids the
+queue.
+
+These rules prevent the "possessed character" failure: an action the
+player no longer wants firing after the game state has moved on. The
+buffer is a forgiveness system, not a commitment the player cannot take
+back.
+
 ### 3. Coyote time
 
 If the player presses jump within `coyote_time_ms` after walking off
@@ -295,3 +308,44 @@ v2 ships when a player can:
    that input feels responsive
 
 Production polish is secondary. Feel is the ship criterion.
+
+## Backlog (Tracked, Not Yet Scoped)
+
+### Settings Menu and Player-Facing Tuning
+
+Deferred, not critical for current combat work, but tracked because it
+shapes how exports are organized going forward.
+
+Some Inspector @export values are developer-only tuning (xfade times,
+stamina pool size, root motion scale) -- internal feel calibration the
+player never touches, or touches only via in-game unlocks. Others are
+latent player settings that will eventually graduate to an end-user
+settings menu: mouse sensitivity, FOV, keybinds, audio levels,
+accessibility options (e.g. wider parry/dodge windows per the
+defensive-mechanics research).
+
+The distinction to carry forward:
+- **Developer tuning:** stays in the Inspector. Never exposed to the
+  player, or only behind special/unlock permissions (e.g. a buff that
+  raises max stamina is gameplay, not a settings toggle).
+- **Player tuning:** flagged mentally as "this will move to a settings
+  UI someday." Mouse sensitivity is the first clear example.
+
+When the settings menu is built, these player-facing values get pulled
+from a settings resource rather than hardcoded @export defaults. Until
+then, leaving them as @export is fine -- just keep the two tiers
+conceptually separate so the migration is clean.
+
+Scope when picked up: a main menu + pause menu + settings window
+(controls, video, audio, accessibility). Pairs naturally with the
+"clean main menu" item already in the v2 "What Done Looks Like" list.
+
+### HUD (Heads-Up Display)
+
+Deferred to its own future development. The current stamina bar
+(scripts/stamina_bar.gd) is a throwaway debug/feedback surface, not the
+start of the real HUD -- it exists to make the stamina pool visually
+testable this session. When the actual HUD is built it will be its own
+system covering health, stamina, active buffs/enchantments, and wave
+state, with proper layout and styling. Do not treat the debug stamina
+bar as a foundation to extend; expect to replace it.

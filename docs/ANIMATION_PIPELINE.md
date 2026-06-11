@@ -379,6 +379,94 @@ the project. Compatibility is enforced at the asset-acquisition gate.
 
 ---
 
+## Holding a One-Shot's Mid-Clip Pose (Freeze-Frame Hold)
+
+A reusable pattern for holding a stance from a clip that wasn't authored
+as a sustained loop. Established Session 7 for the block guard pose;
+applies to any "play into a pose, then hold it" need (block, charge-up,
+ready-stance, aim-hold).
+
+### The problem
+
+Some clips are authored as a full motion -- raise into a pose, hold
+briefly, then return to neutral -- not as a sustainable loop. Sword_Block
+is exactly this: a 1.23s clip that raises into a guard at ~0.5s then
+reverts toward idle. Neither loop mode works:
+- LOOP_NONE: plays once, then the pose sags back to idle (the final
+  frame IS near-idle, since the clip returns).
+- LOOP_LINEAR: replays the whole raise-and-return on a cycle -- the
+  character visibly re-guards every clip length.
+
+The held pose you want is in the MIDDLE of the clip (the peak), not at
+either end.
+
+### The solution: synthetic single-key freeze frame + two-node hold
+
+Build a synthetic Animation at runtime that holds exactly one pose --
+the clip sampled at its peak. A single-key track has nothing to advance
+toward, so it holds that pose indefinitely with zero loop seam.
+
+Then split the stance into two AnimationTree state machine nodes:
+- Enter node: plays the source clip (LOOP_NONE).
+- Hold node: plays the synthetic single-key freeze.
+
+Advance Enter -> Hold via code-driven travel() when play position
+reaches the peak timestamp -- NOT via SWITCH_MODE_AT_END.
+
+Why not AT_END: SWITCH_MODE_AT_END waits for the source clip to play to
+its full end (1.23s) before switching. But the guard pose peaks at
+~0.50s and the clip then reverts toward idle through its remaining
+runtime. With AT_END, Block_Enter would play the full clip -- raise,
+peak, AND the return-to-idle -- before the transition fired, so the
+player would see the guard raise then lower, then snap back up when the
+frozen Hold pose (locked at 0.50) kicked in. We must switch AT the peak,
+not at clip end. A code-driven travel() guarded on
+get_current_play_position() >= block_peak_time does exactly this.
+
+Secondary reason this is the right call: AUTO advance mode (which pairs
+with AT_END for one-shots) is documented as unreliable during travel()
+-- and this project's entire state machine is travel()-driven (Session
+6). A code-driven peak-advance is consistent with that topology; an
+AUTO/AT_END transition would fight it.
+
+Because the freeze is sampled at the same timestamp the live clip is at
+when we transition, the Enter -> Hold blend is between two identical
+poses -- visually seamless.
+
+### Finding the peak timestamp
+
+Do not eyeball the editor scrubber (no numeric readout, imprecise).
+Sample the most-moving upper-body bone's rotation at fine intervals
+across the candidate window and compute per-interval delta magnitude.
+The flattest interval (minimum delta) is the most stable pose -- the
+best freeze point, because residual motion there would cause drift.
+For Sword_Block this was t=0.50 (RightHand fully static 0.50-0.55,
+RightLowerArm at minimum delta). Sampling logic is throwaway debug --
+run once, read the result, remove it.
+
+### The freeze-frame helper
+
+A helper duplicates a source Animation's pose at a sample time into a
+single-key Animation, iterating tracks and using
+position/rotation/scale_track_interpolate() to sample each, inserting
+one key at t=0. Register the result into the animation library under a
+"_Hold" name, then reference it from the Hold node. See
+_make_freeze_frame_animation() in player.gd for the implementation. It
+handles TYPE_POSITION_3D / ROTATION_3D / SCALE_3D explicitly and warns
+on any fallback track type (none hit for Sword_Block's 60 tracks).
+
+### Why this is foundation-grade
+
+Works identically whether you have one clip you're splitting or two
+separate enter/hold clips from an asset pack later. The structure
+doesn't change -- only the clip source does. When a future asset ships
+dedicated guard-enter and guard-hold clips, drop them into the same
+two-node Enter/Hold topology and delete the synthetic freeze. The state
+machine wiring, the code-driven peak-advance, and the release exits all
+stay.
+
+---
+
 ## Known Risks and Watch-Fors
 
 - Destructive save on AnimationTree: set ALL runtime state in _ready().

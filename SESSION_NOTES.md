@@ -427,3 +427,238 @@ animates with tuned feel. Combat animations ready but not yet wired.
 - s5-single-skeleton-pipeline: migration off pose-copy workaround
 - s5-locomotion-animationtree: full locomotion through AnimationTree with tuned
   feel
+
+  ## Session 6 -- A-B-C Combo with Root Motion
+
+**Outcome:** UAL2 Sword_Regular_A/B/C combo working with root motion driving
+CharacterBody3D. Launch glitch resolved. All locomotion and jump travel
+transitions corrected. ANIMATION_PIPELINE.md and ASSET_AUDIT.md updated.
+
+### What Was Done
+
+**ANIMATION_PIPELINE.md written to repo**
+- File already existed and was committed (discovered at session start).
+- SESSION_NOTES.md and ASSET_AUDIT.md from Session 5 wrap were uncommitted
+  -- committed as first act of Session 6.
+
+**UAL2 BoneMap loss discovered and resolved**
+- UAL2.glb BoneMap was silently lost during the Session 5 import-mode
+  switch from Scene to Animation Library. Green-track check passed without
+  it -- the canary does not cover BoneMap loss.
+- Re-confirmed BoneMap in Advanced Import Settings. Root slot (bottom of
+  profile silhouette) verified populated -- "root" assigned to Root.
+- Symptom: UAL2 clips produced T-pose on first runtime test. Resolved by
+  re-confirming the BoneMap.
+- ASSET_AUDIT.md updated with this finding and the Root slot caveat.
+
+**A-B-C combo chain implemented**
+- AnimationTree extended with Attack_A, Attack_A_Rec, Attack_B,
+  Attack_B_Rec, Attack_C nodes (ual2/Sword_Regular_* clips).
+- Attack swing -> Rec: ADVANCE_MODE_AUTO, SWITCH_MODE_AT_END. Swing plays
+  fully before recovery begins.
+- Rec -> next hit: ADVANCE_MODE_ENABLED, code-driven travel() on
+  _attack_queued latch + chain_window_open threshold.
+- Rec/C -> Idle settle: ADVANCE_MODE_ENABLED, code-driven travel() near
+  clip end. NOT AUTO -- _Rec clips are decision points, not one-shots.
+- Session 3 ATTACKING stub (AnimationPlayer.play + animation_finished
+  signal) removed entirely and replaced.
+
+**Key engine findings (Session 6)**
+
+ADVANCE_MODE_DISABLED vs ENABLED vs AUTO:
+- DISABLED: transition invisible to travel() pathfinding. Cannot be
+  traveled. Does not cause phantom paths. Wrong mode for code-driven
+  transitions -- all prior transitions were built DISABLED, meaning every
+  travel() call was falling back to teleport (instant snap, no blend).
+- ENABLED: travel()-only. Correct mode for all reactive code-driven
+  transitions. Never self-fires.
+- AUTO: self-fires every frame when condition is true. For one-shot
+  returns to neutral only.
+- All locomotion and jump transitions corrected from DISABLED to ENABLED
+  this session. Blending now works for the first time since Session 5.
+
+SWITCH_MODE_AT_END vs SWITCH_MODE_IMMEDIATE:
+- Default is IMMEDIATE. AUTO + IMMEDIATE fires on entry, truncating the
+  clip to ~2 frames. This caused every attack swing to snap directly to
+  its recovery with no animation playing.
+- AT_END waits for the clip to finish before transitioning. Required for
+  attack swings (committed one-shots). Jump_Start->Jump already used
+  AUTO implicitly -- confirmed AT_END needed there too.
+
+travel() pathfinding hazard:
+- travel() finds the shortest path of ENABLED transitions between nodes
+  and plays every intermediate node. If Walk->Idle had no direct ENABLED
+  route and the only path went through Attack_A, travel("Idle") played
+  the full attack animation silently.
+- Caused the Session 6 launch glitch: Walk->Idle routed through Attack_A
+  -> Attack_A_Rec -> Idle because those were the only ENABLED exits from
+  Walk after the attack subgraph was added.
+- Fix: ensure every node has direct ENABLED paths to all legitimate
+  targets. Locomotion transitions corrected this session.
+
+Root motion:
+- root_motion_track path is case-sensitive. BoneMap renames source "root"
+  to profile "Root" (capital R). Correct path: %GeneralSkeleton:Root.
+  Wrong case returns (0, 0, 0) silently with no error.
+- BoneMap Root slot is not verified by the green-track check. Auto-mapper
+  leaves it empty. Must verify manually in Advanced Import Settings.
+  Empty Root slot = silent zero extraction.
+- Application: get_root_motion_position() / delta, rotated by
+  _mesh_pivot.global_transform.basis for world-space facing.
+  Apply x/z only; gravity owns y.
+
+**ANIMATION_PIPELINE.md updated** with all Session 6 findings:
+- Corrected transition mechanism section (ENABLED not DISABLED)
+- Added transition topology / pathfinding hazard section
+- Expanded root motion section with setup, track path, BoneMap Root slot
+  requirement, extraction pattern, and known failure modes
+- Added three new Known Risks bullets
+
+**Horizontal walk threshold**
+- velocity.length() included y-component, causing Walk state on spawn
+  during fall-to-floor settle. Changed to
+  Vector2(velocity.x, velocity.z).length() for horizontal-only check.
+
+### Feel Notes
+- chain_window_open = 0.25 (default) -- primary combo tempo knob.
+  Read live per frame; no F5 needed to tune.
+- root_motion_scale = 1.0 (default) -- lunge distance multiplier.
+  Read live per frame; tune from Inspector mid-run.
+- attack_entry_xfade = 0.1, attack_chain_xfade = 0.1,
+  attack_settle_xfade = 0.15 -- baked at _ready(), require F5 to change.
+
+### Commits This Session
+- Session 5 wrap docs (SESSION_NOTES.md + ASSET_AUDIT.md uncommitted from S5)
+- s6: Attack_A single attack through AnimationTree; fix UAL2 BoneMap lost
+  in S5 import mode switch
+- s6: A-B-C combo chaining via latched input buffer, chain_window_open tunable
+- s6: root motion driving CharacterBody3D through attacks; fix Root bone
+  track case, enable locomotion travel transitions, horizontal walk threshold
+- s6: update pipeline doc with ENABLED/AT_END/root-motion findings;
+  asset audit UAL2 BoneMap note
+
+### What's Deferred
+- Root motion on _Rec clips (recovery currently zeros velocity x/z --
+  intentional for now, revisit if recovery feel needs forward bleed)
+- Per-hit facing re-aim windows between combo steps (souls-standard
+  refinement -- facing locks at attack entry currently)
+- Dodge state with i-frames (V2_ARCHITECTURE feel system)
+- Input buffering ring buffer for dodge/attack interplay
+  (current latch is combo-only; full timestamped buffer when dodge enters)
+- HitArea3D / HurtArea3D wiring and actual damage
+- Jump subgraph AT_END audit (suspected same IMMEDIATE truncation issue
+  as attacks -- not blocking, deferred)
+- Locomotion xfade re-tuning (values were calibrated against teleport
+  behavior; now that ENABLED transitions engage real blending, feel may
+  differ -- check at Session 7 start)
+- Repeat-attack restart behavior (known engine issue: non-looping
+  animation that completed may stay on final frame on re-travel;
+  not yet observed in practice but watch for it)
+## Session 7 -- Workflow Automation, Stamina Pool, Block State
+
+**Outcome:** SESSION_STATE.md bootstrap system replaces copy-paste session
+handoff. Stamina pool with regen and UI bar. Block defensive state with
+lock-facing strafe, two-node freeze-frame guard hold, and stamina-break
+lockout. Parry window and buffer-on-release deferred to a future session.
+
+### What Was Done
+
+**Workflow automation (SESSION_STATE bootstrap)**
+- CLAUDE.md gets a Session Bootstrap section instructing Claude Code to
+  read SESSION_STATE.md at session start (auto-read since CLAUDE.md is
+  auto-read).
+- SESSION_STATE.md created at project root -- small, overwritten each
+  wrap, holds only current session number + Last Completed. Claude Code
+  never reads SESSION_NOTES.md (history noise risk -- a stale note caused
+  a prior debug loop).
+- wrap ritual reduced from three deliverables to two: SESSION_NOTES
+  append + SESSION_STATE overwrite. The token-heavy chat-startup-script
+  deliverable was dropped.
+
+**Export organization**
+- player.gd @export vars reorganized into @export_group categories
+  (Movement, Jump & Gravity, Locomotion Blending, Combat, Environment,
+  Stamina, Block). Pure reorder, no value changes. Inspector is the
+  primary feel-tuning surface; organizing it is part of the testability
+  loop.
+
+**Stamina pool**
+- max_stamina, stamina_regen_rate, stamina_regen_delay as @export.
+  _current_stamina runtime state. stamina_changed signal for UI.
+  _drain_stamina() / _update_stamina() with a post-drain regen delay.
+- Throwaway debug UI bar (stamina_bar.gd) subscribed to stamina_changed,
+  plus a temporary P-key debug drain. Bar is NOT the future HUD (flagged
+  in V2_ARCHITECTURE backlog).
+
+**Block state (the session's core)**
+- New State.BLOCKING. Enter/exit on held right-mouse (new block input
+  action, button_index 2). Falls through _update_animation_conditions
+  like ATTACKING so locomotion travel cannot override it.
+- Lock-facing strafe: mesh locks to camera-forward, strafes at
+  block_move_speed (~1.5), does NOT rotate to face movement. The
+  foundational choice over rooted block -- sets up the aim/lock-on
+  facing pattern.
+- Continuous stamina drain while held (block_stamina_drain_rate).
+- Stamina-break: hitting zero force-exits block. Re-entry lockout
+  prevents the held-button re-enter loop; requires release + re-press
+  and block_min_stamina_to_enter to block again.
+
+**Block guard-hold via two-node freeze-frame (the hard-won part)**
+- Sword_Block is a raise -> peak-guard(~0.50s) -> return-to-idle clip,
+  not a sustained loop. LOOP_NONE sags, LOOP_LINEAR re-raises.
+- Solution: synthetic single-key freeze animation sampled at the guard
+  peak (t=0.50, found via per-interval bone-delta analysis), played by a
+  Block_Hold node. Block_Enter plays the raise; code-driven travel()
+  advances to Block_Hold at the peak (NOT SWITCH_MODE_AT_END, which
+  would play through the revert first).
+- Pattern documented in docs/ANIMATION_PIPELINE.md as foundation-grade:
+  same topology works when dedicated enter/hold clips arrive later.
+
+### Learnings Captured (docs)
+- docs/ANIMATION_PIPELINE.md: freeze-frame hold pattern (full section).
+- docs/COMBAT_FEEL.md: NEW doc. Block-over-dodge rationale, parry
+  degrade-to-block, lock-facing strafe, buffer-on-release rules
+  (newer-input priority, void-on-hit), resource-depletion lockout
+  pattern, weapon-coupling constraint. Validated against current sources.
+- docs/AGENTIC_FLOW.md: Testability-First Sequencing (build the system
+  that makes the next feature testable; build only the testable half).
+- docs/REFERENCES.md: tooling/plugin stance (borrow designs, not
+  dependencies; hand-rolled state machine stays).
+- docs/V2_ARCHITECTURE.md: buffer-void-on-interrupt rule; Settings Menu
+  and HUD backlog entries.
+
+### Key Decisions
+- Block/parry as first defensive verb over dodge: lower risk, clean
+  keybind (right-mouse, no Shift/Space collision), serves skill-over-
+  chaos. Repositioning gap (arena swarm) to be solved by a teleport/
+  reposition tool or a later dodge layer, not now.
+- Lock-facing strafe over rooted block: foundational, scope expansion
+  taken deliberately given a lower-time-pressure session.
+- Buffer-on-release out of block (not immediate cancel): matches commit-
+  to-actions design.
+- Two-node freeze-frame over looping the clip tail: zero seam by
+  construction (single-key holds), correct for a clip that reverts.
+- Opus(chat)/Sonnet(Claude Code) split validated against best practice:
+  plan in chat, execute crisp prompts in Sonnet; handoff clean via
+  persistent constraint files.
+
+### Commits This Session
+- s7: workflow -- SESSION_STATE.md bootstrap system
+- s7: organize player exports into @export_group categories
+- s6: root_motion_scale = 2.0 (uncommitted S6 tuning straggler)
+- s7: stamina pool with regen + debug UI bar
+- s7: block state -- lock-facing strafe, stamina drain, block-break
+- s7: block hold via two-node freeze-frame; stamina-break lockout
+- (wrap commit: doc captures -- this append + the docs listed above)
+
+### What's Deferred
+- Parry window timing-detection + parry event (the testable half) --
+  next session, pairs naturally with hit detection for the payoff.
+- Buffer-on-release implementation (attack queued during block, fires on
+  release, void-on-hit) -- design settled in COMBAT_FEEL.md, not built.
+- Weapon-driven animation sets (block + attacks sourced from equipped
+  weapon) -- pays off the weapon-coupling constraint.
+- Bone-mask upper/lower-body layered blocking (true animated shuffle via
+  Blend2 spine filter) -- a named V3-foundation candidate; current
+  full-body shuffle is the interim.
+- HitArea3D/HurtArea3D, dummy target, dodge, locomotion xfade re-tune.

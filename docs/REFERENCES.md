@@ -72,3 +72,34 @@ because:
 - The v2 design retains physics-driven moments (death ragdoll,
   weapon contact) but does not depend on continuous physics
   simulation for player movement.
+
+## Tooling and Plugin Stance
+
+We stay resourceful with existing materials, but draw a line between
+borrowing designs and adopting dependencies.
+
+**Design references (borrow freely):** Study how others decomposed a
+problem, then implement it ourselves. Examples worth reading when the
+relevant system comes up:
+- Wyvernshield (Godot RPG combat framework) -- how it models damage
+  exchange, stat sheets, status effects, and trigger reactions. Useful
+  reference when building the WeaponEnchantment / PlayerBuff layer.
+  Do not adopt as a dependency; read it for decomposition ideas.
+
+**Dependencies (default no):** Plugins that own a system we have
+already designed are a net negative. The hand-rolled two-layer state
+machine is wired directly into our AnimationTree travel() topology and
+tuned around documented engine quirks (ADVANCE_MODE, SWITCH_MODE_AT_END,
+travel() pathfinding). A generic FSM plugin (XSM, BehaviourToolkit,
+etc.) would have to be bent to that wiring or replace it -- both worse
+than the working code. The Godot 4 FSM ecosystem is mature and proven,
+so an exit exists if we ever outgrow the hand-rolled machine, but at
+current scope we do not.
+
+**Why this matters for this project specifically:** the architecture is
+the artifact. Building on a black box we did not design inverts the
+whole premise -- understand the system, direct its implementation. Keep
+code under architectural control; borrow patterns, not packages. This
+is consistent with CLAUDE.md: prefer the simpler Godot-native solution
+over a clever custom one -- and a third-party plugin is neither native
+nor simpler than what we already have.

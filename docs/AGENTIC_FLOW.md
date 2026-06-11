@@ -96,6 +96,27 @@ Full Sword V2. Read this at the start of every new chat session.
 - Code commits immediately when something works. Session notes and
   doc changes bundle into a single wrap commit at session end.
 
+## Testability-First Sequencing
+
+Pick the next build target by what it makes testable. A feature that
+cannot be visually verified yet is a weaker session goal than the
+system that unlocks its verification.
+
+- Build the system that gives the next feature a feedback surface
+  first. Stamina before block (block needs something to drain).
+  Block before parry payoff (parry needs a defensive state to live
+  in). Dummy target before hit detection (hits need something to land
+  on).
+- Prefer the build order that keeps every step visually confirmable in
+  Godot over the order that front-loads the most interesting feature.
+- When a feature's payoff is not yet testable, build only the half
+  that is. Ship the parry timing window now (a press inside it fires a
+  detectable event); defer damage negation to the session where a hit
+  exists to negate.
+
+This is the iterative loop: each build produces something to look at,
+press, or measure. No system goes in unverifiable.
+
 ## Parallel Agent Lanes
 
 When two tasks have zero file overlap, they can run as concurrent
