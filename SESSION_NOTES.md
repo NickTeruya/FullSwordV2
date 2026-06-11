@@ -624,3 +624,135 @@ lockout. Parry window and buffer-on-release deferred to a future session.
   Blend2 spine filter) -- a named V3-foundation candidate; current
   full-body shuffle is the interim.
 - HitArea3D/HurtArea3D, dummy target, dodge, locomotion xfade re-tune.
+## Session 8 -- Hit Detection Both Directions
+
+**Outcome:** Full hit-detection foundation. Player and dummy trade damage
+both directions with visible health feedback. HitArea3D/HurtArea3D layer
+contract proven. Reusable debug-hitbox visualization established. Parry and
+buffer-void deferred -- the incoming-hit dependency they needed is now in
+place, so they are next session's primary work.
+
+### What Was Done
+
+**Doc cleanup (first task)**
+- Removed two stray Claude Code prompt blocks captured into SESSION_NOTES.md
+  (a here-string instruction at the S2/S3 boundary, an Edit-CLAUDE.md block
+  at the S3/S5 boundary). Verified the S3/S5 block's content already lived
+  in CLAUDE.md (Known Engine Behavior) before deleting -- nothing lost.
+  Confirmed no standalone Session 4 notes ever existed; S3 flows to S5.
+
+**Player hit-detection foundation**
+- Player collision_layer corrected from default 1/1 to layer 2 (player) /
+  mask 5 (world+enemy). Was silently on "world" -- worked by accident
+  because arena floor is also layer 1.
+- HurtArea3D added (layer 5 / mask 8, monitoring on, monitorable on).
+  Receives incoming hits. Capsule deliberately TIGHT (0.4 x 1.8) -- player
+  hurtbox favors the player, fewer cheap hits.
+- Collision capsule dimensions driven from @export vars applied in _ready()
+  (move_capsule_radius/height, hurt_capsule_radius/height). .tscn values are
+  explicit fallback; code is authoritative (sub-resource-ignored rule).
+  New @export_group("Collision").
+
+**Dummy target (greenfield)**
+- scenes/dummy.tscn + scripts/dummy.gd. CharacterBody3D on layer 3 (enemy),
+  mask 1 (world). Gravity-only _physics_process (no AI). Visible capsule
+  body mesh (red-orange). Stands in arena at (0,1,-5), 5m ahead of player.
+- Player masks enemy layer, so player physically collides with dummy body.
+
+**Player -> dummy damage path**
+- Player AttackHitArea3D under MeshPivot (layer 4 / mask 16). Active ONLY
+  during swing clips -- driven off AnimationTree node name (Attack_A/B/C =
+  blade live; _Rec and all else = dead) via per-frame check in
+  _process_attacking. No new timing system; reuses existing node-name poll.
+- Reusable debug-hitbox viz: DebugMesh child, unshaded cyan, visible only
+  when hitbox active. _set_attack_hitbox_active(active) sets monitoring AND
+  debug visibility together so they cannot drift. Gated by
+  debug_draw_hitboxes export. THIS IS THE PROJECT HITBOX-DEBUG CONVENTION --
+  reused on the dummy's hitbox; reuse for all future hit-emitters.
+- Damage contract: hitbox carries damage value, calls take_damage() on the
+  thing it overlaps (receiver owns health). Self-hit guard: area.get_parent()
+  == self returns early (Area3D has no same-body auto-exclusion).
+- Dummy health pool + take_damage + health_changed signal.
+
+**Dummy -> player damage path**
+- Dummy HitArea3D (layer 4 / mask 16) + reusable debug mesh (orange).
+- Metronome swing: accumulator in _physics_process. Every attack_interval
+  (2.0s default) the hitbox goes live for attack_active_time (0.15s) then
+  off. Always swinging from spawn -- predictable rhythm for parry practice.
+  Active WINDOW matters: blade must be off-then-briefly-on, not continuous,
+  or there is no timing to parry. (Built as Timer-node alternative; kept the
+  accumulator -- consistent with dummy's existing _physics_process style.)
+- Player health pool mirroring stamina pattern (NO regen -- health does not
+  self-heal). take_damage + health_changed signal. New @export_group("Health").
+- HealthBar UI mirroring stamina_bar.gd. Red, stacked above green stamina
+  bar, bottom-left, no overlap.
+
+**Verified:** Player and dummy trade damage both directions in one F5. Both
+health bars move. Debug boxes flash on their respective active windows.
+
+### Fixes Along The Way
+- Attack hitbox offset was -Z; Quaternius mesh faces +Z. Flipped both the
+  CollisionShape3D and DebugMesh offset to +0.9 (kept in sync). Debug mesh
+  made this a one-pass fix -- the cyan box showed exactly where the hitbox
+  was wrong. First payoff of the debug-viz convention.
+- Spawn facing: character rested facing +Z (toward camera / "south").
+  Set _mesh_pivot.rotation.y = PI in _ready() -- matches the lerp_angle
+  forward-target exactly (atan2(0,-1)=PI), so zero rotation snap on first W.
+  Set initial value only; did not modify the per-frame lerp system.
+
+### Process Notes
+- Claude Code twice ran ahead of read-before-write -- on a read-only recon
+  it silently built the entire dummy->player system (8 min runtime was the
+  tell). Caught via a second clean recon that reported actual file state.
+  Built code was serviceable; reviewed and kept the dummy side rather than
+  churning, added the missing player-receiving half under a hard scope
+  boundary in the next prompt. Guardrail (explicit "do NOT build X, stop
+  when done") held on the re-issued prompt. Lesson: fence agent scope
+  explicitly when a recon precedes a build; "read only" is not always
+  self-enforcing.
+- Three-instance Godot pileup from MCP editor launches. Resolved by closing
+  all, discarding save prompts, reopening one. Convention going forward:
+  human owns the single editor instance; Claude Code reports file state,
+  human does visual/F5 verification. No MCP editor launches.
+- project.godot showed a phantom diff -- Godot re-sorts input actions
+  alphabetically on save; the "block" action moved, was not re-added.
+
+### Feel / Tuning Knobs Introduced (all @export, Inspector-tunable)
+- Player: move_capsule_radius/height (0.5/2.0), hurt_capsule_radius/height
+  (0.4/1.8 -- tight, player-favoring), light_attack_damage (10), max_health
+  (100), debug_draw_hitboxes.
+- Dummy: max_health (100), attack_interval (2.0), attack_damage (8),
+  attack_active_time (0.15), debug_draw_hitboxes.
+
+### Hurtbox Sizing Principle (validated via web research, for COMBAT_FEEL)
+- Collision shapes favor the player. Player hurtbox: tight (fewer cheap
+  hits). Enemy/dummy hurtbox: GENEROUS, >= body (0.55 x 2.0) so player
+  swings that look like hits land. Asymmetric on purpose. Attacker-detects-
+  victim, receiver-owns-damage. NOT YET MIGRATED TO COMBAT_FEEL.md --
+  candidate entry once proven against real enemies.
+
+### What's Deferred
+- Parry payoff: timing-detection half designed (COMBAT_FEEL, 200ms window).
+  Now unblocked -- dummy throws a detectable rhythmic hit to parry against.
+  Next session primary.
+- Buffer-on-release void-on-hit: also unblocked by the incoming hit. Pairs
+  with parry.
+- Bone-attached attack hitbox (rides wrist through swing arc): deferred
+  until weapon system exists. Current MeshPivot-child + forward offset is
+  the interim; activation logic (node-name poll) carries over unchanged.
+- Dummy swing animation / weapon mesh: presentation only, blocked on weapon
+  system. Metronome + debug box is the testable mechanic.
+- Throwaway debug prints in both take_damage methods -- remove once health
+  bars are trusted.
+- Hurtbox-sizing principle migration to COMBAT_FEEL.md.
+
+### Commits This Session
+- s8: remove stray Claude Code prompt blocks from session notes
+- s8: player hit-detection foundation -- collision layers, HurtArea3D,
+  Inspector-tunable capsule volumes
+- s8: dummy target -- CharacterBody3D on enemy layer, visible body, arena
+- s8: player->dummy damage path -- swing-gated attack hitbox, dummy hurtbox
+  + health, debug hitbox viz; fix mesh forward axis (+Z)
+- s8: hit detection both directions -- player health + take_damage + health
+  bar, dummy metronome swing; player<->dummy trading verified
+- (wrap commit: this notes append)
