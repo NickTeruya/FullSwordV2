@@ -53,6 +53,7 @@ enum State { GROUNDED, AIRBORNE, ATTACKING, BLOCKING }
 @export var block_stamina_drain_rate: float = 15.0   # stamina/sec drained while block held
 @export var block_facing_lerp_speed: float = 12.0    # how fast mesh snaps to camera-forward on block
 @export var block_min_stamina_to_enter: float = 5.0  # minimum stamina required to start blocking
+@export var parry_window_ms: float = 200.0           # ms after block press where a hit is a full parry
 
 @export_group("Collision")
 @export var move_capsule_radius: float = 0.5
@@ -74,6 +75,8 @@ var _current_stamina: float = max_stamina
 var _last_drain_ms: int = -1    # Time.get_ticks_msec() at last stamina drain; -1 = never drained
 var _current_health: float = max_health
 var _block_locked_out: bool = false   # true after stamina-break while RMB still held; cleared on release
+var _parry_window_start_ms: float = -1.0  # Time.get_ticks_msec() when parry window opened; -1 = closed
+var _parry_consumed: bool = false         # true once a hit has been absorbed in this window
 var _camera_pivot: Node3D
 var _mesh_pivot: Node3D
 var _anim: AnimationPlayer
@@ -443,14 +446,19 @@ func _make_freeze_frame_animation(source: Animation, sample_time: float) -> Anim
 func _enter_block() -> void:
 	_current_state = State.BLOCKING
 	_state_machine.travel("Block_Enter")
+	if Input.is_action_just_pressed("block"):
+		_parry_window_start_ms = Time.get_ticks_msec()
+		_parry_consumed = false
 
 func _process_blocking(delta: float) -> void:
 	if not Input.is_action_pressed("block"):
+		_parry_window_start_ms = -1.0
 		_current_state = State.GROUNDED
 		_state_machine.travel("Idle")
 		return
 	_drain_stamina(block_stamina_drain_rate * delta)
 	if _current_stamina <= 0.0:
+		_parry_window_start_ms = -1.0
 		_block_locked_out = true
 		_current_state = State.GROUNDED
 		_state_machine.travel("Idle")
@@ -528,7 +536,19 @@ func _drain_stamina(amount: float) -> bool:
 	stamina_changed.emit(_current_stamina, max_stamina)
 	return true
 
+func _is_parry_window_open() -> bool:
+	if _parry_window_start_ms < 0.0 or _parry_consumed:
+		return false
+	return (Time.get_ticks_msec() - _parry_window_start_ms) < parry_window_ms
+
 func take_damage(amount: float) -> void:
+	if _current_state == State.BLOCKING:
+		if _is_parry_window_open():
+			_parry_consumed = true
+			print("PARRY -- negated %.1f damage" % amount)
+			return
+		else:
+			print("BLOCKED -- took %.1f on block" % amount)
 	_current_health = maxf(0.0, _current_health - amount)
 	health_changed.emit(_current_health, max_health)
 	print("Player took %.1f damage, health now %.1f" % [amount, _current_health])
