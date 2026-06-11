@@ -1,6 +1,7 @@
 extends CharacterBody3D
 
 signal stamina_changed(current: float, maximum: float)
+signal health_changed(current: float, maximum: float)
 
 enum State { GROUNDED, AIRBORNE, ATTACKING, BLOCKING }
 
@@ -41,6 +42,9 @@ enum State { GROUNDED, AIRBORNE, ATTACKING, BLOCKING }
 @export var stamina_regen_rate: float = 25.0      # stamina per second when regenerating
 @export var stamina_regen_delay: float = 0.5      # secs after last drain before regen starts
 
+@export_group("Health")
+@export var max_health: float = 100.0
+
 @export_group("Block")
 @export var block_entry_xfade: float = 0.12         # Idle <-> Block_Enter, Block_Enter/Hold -> Idle
 @export var block_hold_xfade: float = 0.08          # Block_Enter -> Block_Hold crossfade
@@ -68,6 +72,7 @@ var _landing_started_ms: int = -1    # Time.get_ticks_msec() at landing; -1 = no
 var _attack_queued: bool = false
 var _current_stamina: float = max_stamina
 var _last_drain_ms: int = -1    # Time.get_ticks_msec() at last stamina drain; -1 = never drained
+var _current_health: float = max_health
 var _block_locked_out: bool = false   # true after stamina-break while RMB still held; cleared on release
 var _camera_pivot: Node3D
 var _mesh_pivot: Node3D
@@ -291,11 +296,17 @@ func _ready() -> void:
 		env.background_mode = Environment.BG_COLOR
 		env.background_color = background_color
 	_current_stamina = max_stamina
+	_current_health = max_health
 	var stamina_bar: ProgressBar = get_node_or_null("HUD/StaminaBar")
 	if is_instance_valid(stamina_bar):
 		stamina_bar.max_value = max_stamina
 		stamina_bar.value = _current_stamina
 		stamina_changed.connect(stamina_bar._on_stamina_changed)
+	var health_bar: ProgressBar = get_node_or_null("HUD/HealthBar")
+	if is_instance_valid(health_bar):
+		health_bar.max_value = max_health
+		health_bar.value = _current_health
+		health_changed.connect(health_bar._on_health_changed)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
@@ -516,6 +527,11 @@ func _drain_stamina(amount: float) -> bool:
 	_last_drain_ms = Time.get_ticks_msec()
 	stamina_changed.emit(_current_stamina, max_stamina)
 	return true
+
+func take_damage(amount: float) -> void:
+	_current_health = maxf(0.0, _current_health - amount)
+	health_changed.emit(_current_health, max_health)
+	print("Player took %.1f damage, health now %.1f" % [amount, _current_health])
 
 func _on_attack_hit(area: Area3D) -> void:
 	if area.get_parent() == self:
