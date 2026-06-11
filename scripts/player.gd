@@ -541,17 +541,18 @@ func _is_parry_window_open() -> bool:
 		return false
 	return (Time.get_ticks_msec() - _parry_window_start_ms) < parry_window_ms
 
-func take_damage(amount: float) -> void:
+func take_damage(amount: float) -> bool:
 	if _current_state == State.BLOCKING:
 		if _is_parry_window_open():
 			_parry_consumed = true
 			print("PARRY -- negated %.1f damage" % amount)
-			return
+			return true
 		else:
 			print("BLOCKED -- took %.1f on block" % amount)
 	_current_health = maxf(0.0, _current_health - amount)
 	health_changed.emit(_current_health, max_health)
 	print("Player took %.1f damage, health now %.1f" % [amount, _current_health])
+	return false
 
 func _on_attack_hit(area: Area3D) -> void:
 	if area.get_parent() == self:
