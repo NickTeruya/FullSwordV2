@@ -1148,3 +1148,69 @@ on a throwaway spike first.
 - Enemy SPAWNER + waves + death (run-loop session; enemy AI was its
   prerequisite — closer now).
 - 2nd/3rd archetype (.tres authoring) once the roster needs to feel distinct.
+
+
+## Session 12 — DEAD state + Spawner foundation
+
+Two increments, both committed. The run loop now has its skeleton:
+enemies spawn → fight → die → clear.
+
+### Increment 1: DEAD state wiring (commit: s12-dead-state)
+The last unbuilt enemy SM state. take_damage already had a State.DEAD
+early-return guard (blocks re-entry) but no health<=0 check. Added:
+- Death check in take_damage AFTER the damage-label spawn, BEFORE
+  _enter_stagger() — a killing blow shows its number, then dies instead
+  of staggering. Death takes precedence over stagger.
+- _enter_dead(): mirrors _enter_stagger idiom — sets State.DEAD, zeroes
+  planar velocity, disarms HitArea via set_deferred("monitoring", false)
+  + _hit_debug.visible = false. Deferred for the same physics-signal
+  re-entrancy reason as stagger (take_damage runs from area_entered).
+- _process_dead(): terminal/absorbing. Zeroes planar velocity, counts
+  _death_timer up to @export death_despawn_delay (default 1.5s), then
+  queue_free(). No detection/steering/attack. Nothing transitions out.
+- New fields: @export death_despawn_delay (1.5), var _death_timer.
+Tested: normal kill (two staggers then DEAD, not a third stagger),
+mid-swing kill (deferred disarm holds — no posthumous hit), despawn
+fires. The 1.5s delay is the ragdoll/death-anim hook for later.
+
+### Increment 2: Spawner foundation (commit: s12-spawner-foundation)
+Marker-driven enemy spawner. New: scenes/spawner.tscn + scripts/spawner.gd.
+- Spawner is a Node3D with @export enemy_scene + @export archetype and
+  Marker3D children (SpawnPoint1/2/3). _spawn_all iterates Marker3D
+  children; _spawn_one does instantiate → set archetype (BEFORE add_child,
+  since _ready reads it) → get_parent().add_child → add_to_group →
+  set global_position. Enemies spawn as direct Arena children (sibling of
+  Spawner), matching where hand-placed EnemyBasic sat — same nav space.
+- Enemy self-registers: add_to_group("enemies") added to enemy.gd _ready().
+  Intrinsic to being an enemy — every enemy is tracked however created.
+  queue_free auto-removes from group; no manual cleanup.
+- EnemyBasic removed from arena.tscn; spawner replaces it. Spawner count
+  readout prints get_nodes_in_group("enemies").size().
+- BUG FOUND + FIXED: add_child from _ready() failed with "Parent node is
+  busy setting up children" — the spawner's own parent was mid-setup.
+  Fix: _ready() calls call_deferred("_spawn_all") so the spawn pass runs
+  after the spawner is fully in-tree. Deferred the whole pass (not
+  per-enemy add_child.call_deferred) to keep archetype-before-add_child
+  ordering synchronous inside _spawn_one.
+Tested at scale: 3 enemies spawn at markers, "Live count: 3" prints, all
+three independently detect/chase. First real multi-agent test of the
+lazy player-ref + nav map_get_iteration_id guard — both held.
+
+### Group-ownership decision (researched, recorded)
+Where live-enemy tracking lives, decided with web research:
+- GROUP membership ("who exists now") = the ENEMY's own property; it
+  self-registers in its _ready(). Tracked however created (spawned,
+  hand-placed, future death-split). One line, can't be forgotten.
+- DEATH NOTIFICATION ("one just died") = a SIGNAL, deferred until a
+  system consumes it. Foundation doesn't need it (kill-and-watch is
+  eye-verifiable). Build the died signal when respawn/max-count/wave
+  logic or the death-split enemy actually reacts to a death.
+- Group answers "who's alive"; a signal answers "a death happened" — a
+  group can't notify on tree-exit, so polling it every frame is the wrong
+  tool for death reactions. Build each when consumed (testability-first).
+
+### Deferred this session (carry-over)
+- Stale UID on basic_swordsman.tres (text-path fallback masked it; load
+  works). Clean with update_project_uids or a re-save when convenient.
+- Cosmetic nav voxel-ceiling warning (agent_radius vs cell_size) — bakes
+  fine, already on backlog.
