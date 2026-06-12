@@ -88,9 +88,9 @@ func _ready() -> void:
 	# DEBUG -- remove after detection is confirmed working
 	print("DetectionArea radius=", sphere.radius, "  mask=", $DetectionArea.collision_mask, "  layer=", $DetectionArea.collision_layer)
 
-func take_damage(amount: float) -> void:
+func take_damage(amount: float) -> bool:
 	if _current_state == State.DEAD:
-		return
+		return false
 	if _current_state == State.STAGGER:
 		amount *= _stagger_damage_mult
 	_current_health = max(0.0, _current_health - amount)
@@ -101,8 +101,9 @@ func take_damage(amount: float) -> void:
 	label.show_damage(amount)
 	if _current_health <= 0.0:
 		_enter_dead()
-		return
+		return false
 	_enter_stagger()
+	return false
 
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
