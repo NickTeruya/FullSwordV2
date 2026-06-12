@@ -323,6 +323,8 @@ func _setup_equipped_weapon() -> void:
 		push_warning("Player: no equipped_weapon assigned; WeaponMesh scale not applied.")
 		return
 	var weapon_mesh := $"MeshPivot/Superhero_Male_FullBody/Armature/GeneralSkeleton/WeaponAttachment/WeaponMesh" as MeshInstance3D
+	if equipped_weapon.mesh != null:
+		weapon_mesh.mesh = equipped_weapon.mesh
 	weapon_mesh.scale = Vector3.ONE * equipped_weapon.mesh_scale
 	var hit_shape := $MeshPivot/AttackHitArea3D/CollisionShape3D.shape as BoxShape3D
 	var new_z: float = base_hitbox_length * equipped_weapon.reach
