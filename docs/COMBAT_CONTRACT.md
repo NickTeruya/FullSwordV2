@@ -74,3 +74,19 @@ and `_blade_live = false` synchronously, defers `monitoring`; the
 ## Self-Hit Guard
 Area3D has no same-body auto-exclusion. Every hit handler must guard
 `if area.get_parent() == self: return` before applying damage.
+
+## Contract Extension Confirmed: Enemy Attacker (Session 11)
+
+The enemy is the second attacker built against this contract; the contract
+held when extended.
+- Enemy HitArea3D (layer 8 / mask 16, the hit-layer contract) detects the
+  player via body_entered and calls the player's take_damage — attacker
+  detects victim, receiver owns outcome (parts 1 & 2). Self-hit guard
+  (get_parent() == self) present.
+- Enemy take_damage is `-> void` — correct per part 3: the enemy has no
+  defensive verb yet (bool return is for parry/block, currently player-only).
+  When an enemy gains a defensive verb, it adopts the `-> bool` signature
+  per the extension point already named in part 3.
+- Stagger-mid-swing disarms the enemy hitbox via
+  set_deferred("monitoring", false) — part 4 (physics-signal re-entrancy)
+  applies to the enemy's own attack interruption.

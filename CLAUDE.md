@@ -76,3 +76,32 @@ session.
 
 ## Session Bootstrap
 At the start of every session, read SESSION_STATE.md before any other work.
+
+### Area3D detection & collision (Session 11)
+- An Area3D detects a BODY via the AREA's collision_mask vs the BODY's
+  collision_layer. The area's OWN layer is irrelevant to what it detects.
+  A pure detector sets collision_layer = 0, mask = the target body's layer
+  (the official Godot detector pattern).
+- A code-constructed/configured Area3D defaults collision_mask to 1 — NOT
+  the .tscn value. If code touches the area in _ready(), set the mask
+  explicitly; the .tscn value is not authoritative once code is involved.
+- body_entered / area_entered are EDGE-triggered (fire once on boundary
+  cross). For ongoing "is X still inside" use get_overlapping_bodies()
+  (level poll). Don't make recovery logic depend solely on a past edge.
+- get_overlapping_bodies() returns an UNTYPED Array — declare
+  `var bodies: Array = ...`, not `:=` (strict-typing inference fails).
+- Shared state needs ONE owner. A reference written by multiple concerns
+  (e.g. detection + stagger both touching a player ref) produces
+  order-dependent bugs. One writer; other states stay neutral.
+
+### Navigation (Session 11)
+- Bake from STATIC COLLIDERS, not visual meshes
+  (PARSED_GEOMETRY_STATIC_COLLIDERS + geometry_collision_mask = floor
+  layer). Visual-mesh baking stalls rendering (GPU→CPU transfer).
+- navmesh cell_size MUST match the navigation map's cell_size (map default
+  0.25). Mismatch risks edge rasterization errors. Change both together or
+  neither.
+- The nav map is NOT queryable until the physics frame AFTER bake — even
+  with a synchronous bake. Instanced agents must guard
+  (map_get_iteration_id == 0 → bail that frame); do NOT cache nav state at
+  _ready(). Same spawn-order discipline as lazy node references.

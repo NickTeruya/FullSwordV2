@@ -211,3 +211,24 @@ arena) is instead assigned to a dedicated repositioning verb (a teleport /
 reposition ability) that does not grant invulnerability. This is an anti-
 checkmate design direction: the defensive vocabulary is block/parry (timing
 skill) plus repositioning (spacing skill), not i-frames (pattern-ignoring).
+
+## Deferred Feel Items (Session 11) — directions in DESIGN_DIRECTIONS.md
+
+These were surfaced in S11; tuning VALUES will land here when addressed.
+- **Player attack-recovery over-committed.** After hitting/staggering an
+  enemy and wanting to disengage, the player feels animation-locked in
+  recovery. Direction: investigate a recovery cancel window /
+  recovery-into-movement (the Souls-committed vs character-action-cancellable
+  dial). Now tunable — two-way combat exists as of S11. Pairs with the
+  combo-handoff re-aim item.
+- **Enemy windup telegraph is currently invisible** (no swing animation —
+  the hitbox blinks on at strike with no readable wind-up). A visible windup
+  is what makes the enemy fair/parryable (the S9 parry needs a tell). Blocked
+  on enemy swing anims.
+- **Attack spacing tuning deferred.** attack_range (stop distance), hitbox
+  reach, and stop distance are proven coordinated and Inspector-tunable, but
+  final values wait for real enemy animations + weapon models. No point
+  tuning spacing/timing against a sliding capsule.
+- Baseline as of S11 (placeholder, NOT final): attack_range 1.4, hitbox box
+  depth 1.6 / offset 0.8 (effective reach 1.6), windup/active/recovery phase
+  timers @export.

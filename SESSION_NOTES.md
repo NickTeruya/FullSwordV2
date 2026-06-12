@@ -1019,3 +1019,132 @@ damage sourced from the equipped weapon. Floating damage numbers added
 - s10: floating damage numbers -- Label3D billboard, receiver-side spawn
 - s10: WeaponResource.mesh applied at setup; .tres is single source for mesh
 - (wrap commit: WEAPON_SYSTEM.md new, asset audit + combat feel + session notes)
+
+## Session 11 — Enemy AI: Detection, Chase, Attack (state-machine enemy)
+
+**Outcome:** Built a complete two-way-combat enemy on a scalable spine —
+detects, chases, faces, holds at strike range, swings on cadence, deals
+damage, can be staggered out of its swing, gives up and returns to idle if
+the player escapes. Session goal (Idle→Chase→Attack→Stagger→Dead state
+machine) achieved except DEAD, which is wired next session. Two real bugs
+caught and fixed structurally. Nav is the one genuinely new system; proven
+on a throwaway spike first.
+
+### Build Arc (testability-first increments, each an F5)
+1. **Nav spike (throwaway):** NavigationRegion3D bake + NavigationAgent3D
+   pathing a bare capsule to a hardcoded point. Proved pathing in the
+   D3D12/Jolt/gray-box setup BEFORE any enemy structure. Also shook out two
+   bake issues while still disposable (below). Deleted after 3b.
+2. **3a — base enemy spine:** enemy.gd + enemy.tscn + EnemyArchetype.gd +
+   basic_swordsman.tres. Carried the dummy's proven combat patterns (health
+   pool, take_damage→stagger, hitbox-debug cannot-drift convention, self-hit
+   guard, generous r=0.55 hurtbox). Enum+match state machine in do-nothing
+   IDLE. Confirmed takes damage + staggers, no regression vs dummy.
+3. **3b — fold nav agent into enemy:** proven spike agent onto the instanced
+   enemy, with the load-order guard (instanced scene has no arena-tree bake
+   ordering). Stagger freezes mid-path. Spike deleted after this proved out.
+4. **3c-detection:** proximity Area3D (DetectionArea), lazy-guarded player
+   ref, IDLE↔CHASE, the _lose_aggro() seam + generous distance backstop.
+5. **3c-chase:** steer to player, facing (lerp_angle, horizontal-only),
+   hold at engage range facing the player. The enemy visibly pursues.
+6. **3d — attack:** state-gated windup→active→recovery swing from the hold
+   branch; HitArea layer 8/mask 16; damage via COMBAT_CONTRACT; stagger
+   kills a live swing. Spacing coordinated so the enemy stops inside its
+   own reach.
+
+### Bugs Caught & Fixed (both structural, not patched)
+- **Detection never fired (mask default).** A code-constructed Area3D
+  defaults collision_mask to 1, NOT the .tscn value. DetectionArea was
+  silently masking layer 1 while the player is on layer 2. Fix: set mask=2
+  explicitly in code. Lesson: when code touches an area, the .tscn value is
+  not authoritative — set properties in code. Also clarified the detection
+  DIRECTION: an area detects a body via the AREA's mask vs the BODY's layer;
+  the area's own layer is irrelevant (detector pattern: layer 0, mask only).
+- **Enemy went passive after one hit (edge-vs-level + shared-state owner).**
+  body_entered is edge-triggered; re-aggro after stagger depended on
+  _player_ref surviving, but it was being conflated as multi-writer state.
+  Structural fix (chosen over a one-line patch, per community FSM best
+  practice — trigger transitions + polling checks, single-owner state,
+  side-effect-free action states): _player_ref has ONE owner (detection),
+  written only on body_entered/exited + an IDLE level-poll re-acquire;
+  stagger/lose-aggro are detection-neutral. The bug can't exist regardless
+  of stagger behavior. Verified with the deterministic stress test (stand
+  still on enemy, get hit, re-chase without moving — confirmed in console:
+  AGGRO recurs with no new DETECTED).
+
+### Nav bake issues (fixed on the spike, before the real enemy)
+- Bake was sourcing VISUAL meshes (GPU→CPU stall warning). Fixed to
+  PARSED_GEOMETRY_STATIC_COLLIDERS + geometry_collision_mask = floor layer
+  (1). Same floor collider the physics world already uses.
+- cell_size tweak to clear a cosmetic voxel-ceiling warning introduced a
+  WORSE warning (navmesh cell_size 0.1 vs nav-map cell_size 0.25 mismatch →
+  edge rasterization risk). Reverted to 0.25 (matched). LESSON: navmesh
+  cell_size and nav-map cell_size must change TOGETHER or not at all.
+  Voxel-ceiling warning accepted as cosmetic backlog on the flat arena.
+
+### Key Decisions
+- **Dummy stays a separate fixture, enemy is its own class.** Dummy's
+  predictable metronome is valuable for parry practice; enemy is built on a
+  scalable base. Carried the dummy's PATTERNS, did not extend it.
+- **Scalable spine, one archetype.** enemy.gd/.tscn shared; EnemyArchetype
+  .tres is the data axis; data-driven easy axis, inheritance-open hard axis.
+  Built the spine, authored ONE archetype (basic_swordsman), proved one
+  enemy. (Documented in NEW docs/ENEMY_ARCHITECTURE.md.)
+- **Seams built, behavior deferred:** _lose_aggro(), _get_engage_range(),
+  _can_detect_player() (LoS-ready), windup/active/recovery phasing.
+- **Aggro-loss is NOT a distance-leash** (arena context; back-up-to-reset
+  exploit). Backstop is a runaway guard only. Real disengage = future
+  player powerup + per-enemy personality. (Captured in NEW
+  docs/DESIGN_DIRECTIONS.md.)
+- **Attack spacing proven correct & tunable, but tuning DEFERRED** until
+  real enemy swing animations + weapon models exist — no point tuning
+  spacing/timing against a sliding capsule.
+
+### New Docs
+- docs/ENEMY_ARCHITECTURE.md (NEW) — Tier 1 as-built enemy mechanism,
+  sibling to COMBAT_CONTRACT. The state machine, archetype pattern, seams,
+  detection ownership, combat wiring, engine-behavior learned.
+- docs/DESIGN_DIRECTIONS.md (NEW) — Tier 2 parking lot for undecided design
+  intent (per-enemy aggro personality, player disengage powerup, recovery/
+  telegraph feel directions). Explicitly revisable, not a spec.
+
+### Process Notes
+- Spike-first de-risking paid off: nav (the only new system) was proven and
+  its bake issues shaken out on a throwaway before the real enemy depended
+  on it.
+- Read-only recon before the build (dummy.gd/.tscn carry-over audit) drove
+  the base-enemy structure decisions from facts, not memory.
+- One human-in-the-loop checkpoint (researched FSM detection best practice
+  before committing the _player_ref fix) upgraded a patch into a structural
+  fix. Method lesson: when a behavior's correctness depends on an assumption
+  about shared state, design the dependency OUT, don't just verify it.
+- In-engine Inspector tuning (attack_range on the archetype) used directly
+  for spacing — no prompt round-trip. The @export/archetype philosophy
+  working as intended.
+
+### Commits This Session
+- s11: nav spike — bake + agent pathing proven (later removed)
+- s11: nav bake source → static colliders; cell_size matched to map
+- s11: base enemy spine — archetype resource, state machine, combat carry-over
+- s11: fold nav agent into enemy — instanced load-order guard
+- s11: enemy detection — single-owner ref, edge+level hybrid, lose-aggro seam
+- s11: enemy chase — steer to player, facing, hold at engage range
+- s11: enemy attack — state-gated windup/active/recovery swing, contract wiring
+- s11: spike removed; new docs ENEMY_ARCHITECTURE, DESIGN_DIRECTIONS
+- (wrap commit: this notes append + doc touch-ups)
+
+### Backlog (deferred this session)
+- **3e — DEAD state wiring** (health-zero → DEAD → stop processing →
+  despawn/ragdoll). Next session's primary opener.
+- Enemy swing ANIMATIONS (UAL2) + weapon models — the named blocker for
+  final spacing/timing/telegraph tuning.
+- Attack spacing tune (attack_range + stop distance + hitbox reach) —
+  deferred to the above.
+- Player attack-recovery feel (over-committed disengage) — tunable now that
+  two-way combat exists; pairs with combo-handoff re-aim.
+- Enemy health bar (no visual health yet; inferred from damage numbers).
+- Voxel-ceiling nav warning — cosmetic; fix = matched navmesh+map cell_size
+  when obstacle geometry arrives.
+- Enemy SPAWNER + waves + death (run-loop session; enemy AI was its
+  prerequisite — closer now).
+- 2nd/3rd archetype (.tres authoring) once the roster needs to feel distinct.
