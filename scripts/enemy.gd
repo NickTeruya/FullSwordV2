@@ -19,6 +19,7 @@ enum AttackPhase { WINDUP, ACTIVE, RECOVERY }
 @export var windup_time: float = 0.3
 @export var active_time: float = 0.2
 @export var recovery_time: float = 0.5
+@export var death_despawn_delay: float = 1.5
 
 @export_group("Hitbox Debug")
 @export var debug_draw_hitboxes: bool = true
@@ -27,6 +28,7 @@ var _current_state: State = State.IDLE
 var _current_health: float
 var _max_health: float = 100.0
 var _stagger_timer: float = 0.0
+var _death_timer: float = 0.0
 var _stagger_duration: float = 1.2
 var _stagger_damage_mult: float = 2.0
 var _move_speed: float = 3.5
@@ -97,6 +99,9 @@ func take_damage(amount: float) -> void:
 	label.position = Vector3(0.0, 2.0, 0.0)
 	add_child(label)
 	label.show_damage(amount)
+	if _current_health <= 0.0:
+		_enter_dead()
+		return
 	_enter_stagger()
 
 func _physics_process(delta: float) -> void:
@@ -232,8 +237,14 @@ func _process_stagger(delta: float) -> void:
 		_repath_timer = _repath_interval
 		print("Enemy stagger ended")
 
-func _process_dead(_delta: float) -> void:
-	pass  # TODO: death increment
+func _process_dead(delta: float) -> void:
+	# Terminal, absorbing state. No detection, steering, or attack.
+	# Freeze planar motion; let gravity still apply via move_and_slide.
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_death_timer += delta
+	if _death_timer >= death_despawn_delay:
+		queue_free()
 
 func _enter_chase() -> void:
 	_current_state = State.CHASE
@@ -264,6 +275,17 @@ func _enter_stagger() -> void:
 	# after recovering from stagger -- prevents instant re-attack.
 	_attack_cooldown = 0.0
 	print("Enemy STAGGERED")
+
+func _enter_dead() -> void:
+	_current_state = State.DEAD
+	_death_timer = 0.0
+	velocity.x = 0.0
+	velocity.z = 0.0
+	# Same re-entrancy reason as _enter_stagger: take_damage can run from
+	# area_entered (physics-signal callback), so defer the monitoring toggle.
+	_hit_area.set_deferred("monitoring", false)
+	_hit_debug.visible = false
+	print("Enemy DEAD")
 
 # Mechanical core of aggro drop -- seam where future taste-tier behaviors attach.
 # Future callers: player stealth/disengage powerup; per-archetype disengage
