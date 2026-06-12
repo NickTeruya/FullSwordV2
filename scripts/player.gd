@@ -3,6 +3,8 @@ extends CharacterBody3D
 signal stamina_changed(current: float, maximum: float)
 signal health_changed(current: float, maximum: float)
 
+const FLOATING_DMG := preload("res://scenes/floating_damage_number.tscn")
+
 enum State { GROUNDED, AIRBORNE, ATTACKING, BLOCKING }
 
 @export_group("Movement")
@@ -63,6 +65,7 @@ enum State { GROUNDED, AIRBORNE, ATTACKING, BLOCKING }
 
 @export_group("Combat Damage")
 @export var light_attack_damage: float = 10.0
+@export var base_hitbox_length: float = 1.2  # Z extent at reach=1.0; scaled by equipped_weapon.reach
 
 @export_group("Hitbox Debug")
 @export var debug_draw_hitboxes: bool = true
@@ -321,6 +324,11 @@ func _setup_equipped_weapon() -> void:
 		return
 	var weapon_mesh := $"MeshPivot/Superhero_Male_FullBody/Armature/GeneralSkeleton/WeaponAttachment/WeaponMesh" as MeshInstance3D
 	weapon_mesh.scale = Vector3.ONE * equipped_weapon.mesh_scale
+	var hit_shape := $MeshPivot/AttackHitArea3D/CollisionShape3D.shape as BoxShape3D
+	var new_z: float = base_hitbox_length * equipped_weapon.reach
+	hit_shape.size = Vector3(hit_shape.size.x, hit_shape.size.y, new_z)
+	var debug_mesh := $MeshPivot/AttackHitArea3D/DebugMesh.mesh as BoxMesh
+	debug_mesh.size = Vector3(debug_mesh.size.x, debug_mesh.size.y, new_z)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
@@ -562,6 +570,10 @@ func take_damage(amount: float) -> bool:
 			print("BLOCKED -- took %.1f on block" % amount)
 	_current_health = maxf(0.0, _current_health - amount)
 	health_changed.emit(_current_health, max_health)
+	var label: FloatingDamageNumber = FLOATING_DMG.instantiate()
+	label.position = Vector3(0.0, 2.0, 0.0)
+	add_child(label)
+	label.show_damage(amount)
 	return false
 
 func _on_attack_hit(area: Area3D) -> void:
@@ -569,4 +581,4 @@ func _on_attack_hit(area: Area3D) -> void:
 		return
 	var target := area.get_parent()
 	if target.has_method("take_damage"):
-		target.take_damage(light_attack_damage)
+		target.take_damage(equipped_weapon.damage if equipped_weapon else light_attack_damage)
