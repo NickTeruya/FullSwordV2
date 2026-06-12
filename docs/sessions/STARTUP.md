@@ -85,7 +85,7 @@ Create a new project at claude.ai. Upload these files to project
 knowledge:
 
     CLAUDE.md
-    AGENTIC_FLOW.md
+    docs/AGENTIC_FLOW.md
     SESSION_NOTES.md
     docs/ASSET_AUDIT.md
     docs/V2_ARCHITECTURE.md

@@ -13,20 +13,19 @@ if (-not (Test-Path $ProjectRoot)) {
 
 Set-Location $ProjectRoot
 
-# Best-effort: read SESSION_NOTES.md to suggest the next session number.
-# If parsing fails for any reason, just leave it as "?".
-$SessionNumber = "?"
-if (Test-Path "SESSION_NOTES.md") {
-    try {
-        $sessionMatches = Select-String -Path "SESSION_NOTES.md" -Pattern "^## Session (\d+)" -AllMatches |
-            ForEach-Object { [int]$_.Matches[0].Groups[1].Value }
-        if ($sessionMatches) {
-            $SessionNumber = ($sessionMatches | Measure-Object -Maximum).Maximum + 1
-        }
-    } catch {
-        # Parsing failed; fall through with "?"
-    }
+# Read next session number from SESSION_STATE.md — authoritative, set deliberately each wrap.
+# Fail loud if the file or the field is missing; a wrong number is worse than a halt.
+$StateFile = "docs/sessions/SESSION_STATE.md"
+if (-not (Test-Path $StateFile)) {
+    Write-Host "ERROR: $StateFile not found. Cannot determine session number." -ForegroundColor Red
+    exit 1
 }
+$nextLine = Select-String -Path $StateFile -Pattern "^Next session:\s*(\d+)" | Select-Object -First 1
+if (-not $nextLine) {
+    Write-Host "ERROR: 'Next session: N' line not found in $StateFile." -ForegroundColor Red
+    exit 1
+}
+$SessionNumber = [int]$nextLine.Matches[0].Groups[1].Value
 
 # Build the chat bootstrap message
 $BootstrapMessage = @"
@@ -34,14 +33,14 @@ Continuing Full Sword V2. Session $SessionNumber.
 
 Read these from Project Knowledge first and confirm access:
 - CLAUDE.md
-- V2_ARCHITECTURE.md
-- AGENTIC_FLOW.md
-- SESSION_NOTES.md
-- ASSET_AUDIT.md
+- docs/V2_ARCHITECTURE.md
+- docs/AGENTIC_FLOW.md
+- docs/sessions/SESSION_NOTES.md
+- docs/ASSET_AUDIT.md
 
 Status: [FILL IN — what was last done, what's next]
 
-Workflow ground rules per AGENTIC_FLOW.md:
+Workflow ground rules per docs/AGENTIC_FLOW.md:
 - Claude Code prompt is default for every change; GUI fallback only when MCP can't do the task.
 - Web search after 2 failed diagnostic loops.
 - Diagnostics before tuning — instrument and measure, don't iterate by feel.
@@ -72,5 +71,5 @@ Write-Host "   2. Paste bootstrap (already on clipboard) into Claude.ai chat" -F
 Write-Host "   3. Run 'claude' below to start Claude Code" -ForegroundColor Gray
 Write-Host "      Verify with /mcp that Godot MCP server is connected" -ForegroundColor Gray
 Write-Host ""
-Write-Host " If MCP server is missing or env vars are gone, see STARTUP.md" -ForegroundColor Yellow
+Write-Host " If MCP server is missing or env vars are gone, see docs/sessions/STARTUP.md" -ForegroundColor Yellow
 Write-Host ""

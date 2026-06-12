@@ -21,7 +21,7 @@ See V2_ARCHITECTURE.md for full design spec.
 - Scripts are short and single-responsibility
 
 ## Current Scope
-Defined per-session in SESSION_NOTES.md. When in doubt, defer.
+Defined per-session in docs/sessions/SESSION_NOTES.md. When in doubt, defer.
 
 ## Out of Scope for v2 Ship
 - Online multiplayer
@@ -75,7 +75,7 @@ session.
   without new information
 
 ## Session Bootstrap
-At the start of every session, read SESSION_STATE.md before any other work.
+At the start of every session, read docs/sessions/SESSION_STATE.md before any other work.
 
 ### Area3D detection & collision (Session 11)
 - An Area3D detects a BODY via the AREA's collision_mask vs the BODY's
