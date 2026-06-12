@@ -2,6 +2,8 @@ extends CharacterBody3D
 
 signal health_changed(current: float, maximum: float)
 
+const FLOATING_DMG := preload("res://scenes/floating_damage_number.tscn")
+
 @export_group("Health")
 @export var max_health: float = 100.0
 
@@ -39,7 +41,10 @@ func take_damage(amount: float) -> void:
 		amount *= stagger_damage_mult
 	_current_health = max(0.0, _current_health - amount)
 	health_changed.emit(_current_health, max_health)
-	print("Dummy took %.1f damage, health now %.1f" % [amount, _current_health])
+	var label: FloatingDamageNumber = FLOATING_DMG.instantiate()
+	label.position = Vector3(0.0, 2.0, 0.0)
+	add_child(label)
+	label.show_damage(amount)
 
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
