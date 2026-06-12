@@ -155,3 +155,59 @@ attack clips should come from the equipped weapon's animation set (the
 WeaponResource pattern already defines attack sets; block joins them),
 not be baked in _ready(). Deferred to that work. Flagged here so it is
 not forgotten.
+
+
+---
+
+## Parry economics: clean parry is free, the punishment is the degrade
+
+Decided Session 9, captured Session 10. A clean parry (timed press inside the
+window) costs nothing -- full damage negation, attacker staggered, counter
+window opened. The punishment for MISTIMING is the degrade-to-block stamina
+drain, and nothing more. No separate whiff cost.
+
+Rationale: community research on stance-based parry converges on putting the
+cost on the SUCCESS side, not the failure side. Explicit whiff penalties
+(flat stamina cost on a missed parry) read as stacked punishment -- you
+mistimed AND you're penalized -- and the well-tuned reference prototypes
+found this kills the mechanic's approachability. The degrade-to-block is
+already the punishment: a mistimed parry attempt is just a block, draining
+stamina, with none of the parry payoff. That is a sufficient and legible
+cost. The roguelite buff layer carries the difficulty curve, so the base
+verb stays fair at floor power.
+
+---
+
+## Tuning baselines (recorded targets, not copied frame data)
+
+- Parry window: 200ms (deliberately forgiving start; shipped stance games run
+  130-170ms / ~8-10 frames at 60fps -- tune toward tighter as the skill
+  ceiling firms up).
+- Stagger damage multiplier: 2.0x (the counter-window reward).
+- Stagger duration: 1.2s (the counter window IS the stagger window -- Valheim
+  model, no separate riposte animation; reward is the damage multiplier).
+
+These are starting points for feel tuning, recorded so tuning has a target.
+
+---
+
+## Hurtbox sizing is asymmetric on purpose
+
+Collision shapes favor the player. The player hurtbox is TIGHT (smaller than
+the body -- fewer cheap hits land on the player). The enemy/dummy hurtbox is
+GENEROUS (>= body -- player swings that look like hits connect). This
+asymmetry is deliberate and is the standard action-game feel cheat:
+attacker-detects-victim, receiver-owns-damage, and the volumes are tuned to
+make the player feel skilled rather than cheated.
+
+---
+
+## Dodge deferral is a direction, not a delay
+
+Dodge is deferred INDEFINITELY, not "until later." i-frame dodge trivializes
+attack patterns -- it becomes a crutch that lets players ignore reading the
+opponent. The repositioning problem dodge would solve (getting swarmed in an
+arena) is instead assigned to a dedicated repositioning verb (a teleport /
+reposition ability) that does not grant invulnerability. This is an anti-
+checkmate design direction: the defensive vocabulary is block/parry (timing
+skill) plus repositioning (spacing skill), not i-frames (pattern-ignoring).

@@ -756,3 +756,266 @@ health bars move. Debug boxes flash on their respective active windows.
 - s8: hit detection both directions -- player health + take_damage + health
   bar, dummy metronome swing; player<->dummy trading verified
 - (wrap commit: this notes append)
+## Session 9 -- Parry Payoff, Stagger/Counter Window, Combat Contract Doc
+
+**Outcome:** Full parry mechanic working -- timed RMB press inside a
+200ms window negates damage, staggers the dummy, opens a counter window
+(doubled damage during stagger). Mistimed press degrades to block with
+normal stamina drain (the punishment -- no separate cost). Debug-print
+cleanup done. New foundational doc COMBAT_CONTRACT.md captures the
+hit-resolution contract, verified against live source.
+
+### What Was Done
+
+**Parry timing detection (player.gd)**
+- parry_window_ms @export (200.0). Window opens on block-press rising
+  edge in _enter_block (Time.get_ticks_msec stamp). _is_parry_window_open
+  helper; _parry_consumed one-shot guard so one press = one parry.
+- take_damage changed to `-> bool`. Parry path returns true (full negate,
+  early return); all other paths return false. Window resets to -1.0 on
+  both block exits (release, stamina break).
+- Design: clean parry is FREE. Punishment for mistime is the
+  degrade-to-block stamina drain, nothing extra. Chosen over a flat whiff
+  cost after community research -- explicit whiff costs read as stacked
+  punishment and kill the mechanic; the well-tuned reference prototypes
+  put stamina on the SUCCESS side. Roguelite buff layer carries the
+  difficulty curve, so the base verb stays fair at floor power.
+
+**Stagger + counter window (dummy.gd)**
+- stagger_damage_mult (2.0), stagger_duration (1.2) as @export.
+  _staggered + _stagger_timer runtime state.
+- Counter window IS the stagger window (Valheim model): no riposte
+  animation (none in UAL2), reward is a damage multiplier on the dummy
+  during stagger. Player attacks into the stunned dummy land doubled.
+- Wired via the return-bool contract: _on_dummy_hit captures
+  take_damage's bool, calls _enter_stagger() on true. Stagger suppresses
+  the swing metronome (whole block walled in an `if _staggered / else`),
+  multiplies incoming damage, disarms hitbox immediately; on expiry
+  resets _attack_timer for a fresh swing cycle.
+
+**Bug fixed:** _enter_stagger set monitoring directly inside the
+area_entered signal dispatch -> "Function blocked during in/out signal"
+physics lock. Fix: set_deferred("monitoring", false). Logic reads the
+synchronous _staggered flag, so deferral opens no gap. Captured as
+contract part 4.
+
+**Cleanup**
+- Removed throwaway damage-value prints from both take_damage methods.
+  State prints (PARRY, BLOCKED, Dummy STAGGERED, stagger ended) kept --
+  in use for feel tuning.
+
+**Docs**
+- NEW docs/COMBAT_CONTRACT.md -- Tier 1 foundational hit-resolution
+  contract, verified against live source (not transcribed). Four parts:
+  attacker-detects-victim, receiver-owns-outcome, return-bool channel
+  (with enemy-defense extension point named), deferred physics toggle.
+- COMBAT_FEEL.md additions (Tier 2, revisable): parry-is-free /
+  degrade-to-block-is-the-punishment rationale; 200ms window + 2x stagger
+  + 1.2s duration as tuning baselines; hurtbox-sizing principle migrated
+  from S8 notes; dodge-deferral DIRECTION (dodge deferred indefinitely in
+  favor of a non-i-frame repositioning verb, for anti-checkmate reasons
+  -- not "later," replaced).
+
+### Key Decisions
+- Combat contract gets its OWN doc (Tier 1), separate from COMBAT_FEEL
+  (Tier 2). Rationale: mechanical wiring is taste-independent and ports
+  to V3; tuning/feel is revisable as taste changes with V2 practice.
+- Weapon system is the keystone next goal: unblocks weapon-driven
+  animation sets, feeds enemy AI (enemies need weapons), absorbs
+  stamina-gates-attacks (a WeaponResource field) and bone-attached
+  hitbox. Weapon MESHES already owned (Quaternius LowPoly Medieval
+  Weapons, CC0, staged S19) -- the work is the WeaponResource system +
+  BoneAttachment3D wiring, not asset acquisition.
+- Dodge deferred indefinitely (not next-in-queue): i-frame dodge
+  trivializes attack patterns; repositioning to be solved by a dedicated
+  movement verb. Anti-checkmate design direction.
+
+### Backlog (captured this session)
+- Run loop / waves / death-reset: the NAMED game-structure gap. Building
+  combat-content foundation (weapons, enemy AI) before game-structure,
+  deliberately bottom-up. Flagged so the loop gets closed rather than
+  building combat tech indefinitely.
+- Enemy AI (high priority, after weapons)
+- Buffer-on-release (mid/low; design settled in COMBAT_FEEL, void-on-hit
+  now testable)
+- Weapon-driven animation sets (tied to weapon system)
+- Bone-attached hitbox (medium; wants weapon system first)
+- Lock-on / target acquisition (surfaces when a real moving enemy exists;
+  reuses block lock-facing pattern)
+- Roguelite enchantment/buff design -- earns its OWN planning session
+  (WeaponEnchantment / PlayerBuff; "what's modifiable" is the roguelite's
+  identity)
+- Shell: title/loading screen, settings menu (settings already in
+  V2_ARCHITECTURE backlog from S7)
+- Polish: character skins (assets + remap design ready), environment
+  MegaKits (gated behind working gray-box combat loop per ASSET_AUDIT)
+- Parry counter riposte animation -- asset-blocked, deferred
+
+### Workflow Note
+- Terminal-paste mangling (ragged tables, mid-token truncation) is
+  cosmetic, caused by Unicode box-drawing + terminal width-wrapping
+  surviving copy poorly. Never hidden a real bug, but request plain-ASCII
+  one-fact-per-line output on readback prompts to avoid it. Candidate
+  AGENTIC_FLOW convention.
+
+### Commits This Session
+- s9: parry timing detection -- 200ms window negates on timed press,
+  degrades to block on mistime
+- s9: parry payoff -- stagger + 2x counter window; dummy self-staggers on
+  parried hit, swing suppressed for stagger_duration, deferred monitoring
+  toggle
+- s9: remove throwaway damage-value debug prints from take_damage methods
+- (wrap commit: COMBAT_CONTRACT.md new, COMBAT_FEEL.md + SESSION_NOTES.md
+  doc captures)
+---
+
+## Session 10 -- Weapon System
+
+**Outcome:** Data-driven weapon system live. WeaponResource (.tres) is the
+single source of weapon identity -- mesh, visual scale, hitbox reach, damage,
+and combo definition all authored as data; player is weapon-agnostic. Sword
+mesh attached to RightHand via BoneAttachment3D. Attack hitbox reach and
+damage sourced from the equipped weapon. Floating damage numbers added
+(receiver-side per combat contract). NEW Tier-1 doc: WEAPON_SYSTEM.md.
+
+### What Was Done
+
+**WeaponResource pattern (the foundation)**
+- scripts/weapon_resource.gd -- extends Resource, class_name WeaponResource.
+  Fields: weapon_name, mesh (Mesh), reach (hitbox length MULTIPLIER),
+  mesh_scale (base visual scale), damage, swing_duration, stamina_cost,
+  root_motion_intensity, combo_steps (Array[ComboStep]). All @export, typed,
+  grouped.
+- scripts/combo_step.gd -- extends Resource, class_name ComboStep. Fields:
+  swing, recovery (AnimationTree node-name strings; empty recovery = finisher).
+- resources/weapons/Sword.tres -- first weapon instance. reach 1.0, damage
+  10.0, mesh_scale 0.25, root_motion_intensity 2.0, A/B/C combo steps.
+
+**ComboStep promotion (Array[Dictionary] -> Array[ComboStep])**
+- First built combo_steps as Array[Dictionary]. Inspector dictionary editing
+  is fiddly (per-key/value type dropdowns) and offers no typo protection --
+  recovery keys silently failed to save; only the read-back verification
+  caught it. Promoted to a typed ComboStep sub-resource: clean two-field form,
+  half-filled entries impossible, and the shape that absorbs future per-step
+  fields. The friction was the signal.
+- Editor reload required after the type-flip: an open .tres validates against
+  the OLD field type until Godot rescans. "Attempted to set Object into
+  TypedArray of type Dictionary" cleared after Project > Reload Current Project.
+
+**Sword mesh on the hand (BoneAttachment3D)**
+- BoneAttachment3D (WeaponAttachment) child of GeneralSkeleton, bone_name
+  "RightHand" (retargeted canonical name -- precedent: the Root root-motion
+  bone). MeshInstance3D (WeaponMesh) child holds the Sword OBJ mesh.
+- OBJ-as-Mesh chosen over FBX-as-PackedScene: cleaner static-prop primitive,
+  less likely to carry FBX unit-scale quirks.
+- mesh_scale 0.25 (gigantic at 1.0 -- unit mismatch). Scale is DATA (a buff
+  will modify it); rotation/position seating is NODE-LEVEL (fixed fact of how
+  this mesh meets this bone). The layer test: "would a buff ever change this?"
+- Closed-fist hand clipping accepted as asset-family limitation. Researched:
+  static-mesh-on-bone + manual offset is the industry-standard first rung; the
+  fix (per-weapon grip hand poses / finger IK) is disproportionate and blocked
+  by the baked-fist asset regardless. Shipped games (incl. VR) accept or hide
+  it. Not a defect; do not relitigate per weapon.
+
+**equipped_weapon seam + data application**
+- @export var equipped_weapon: WeaponResource on the player (one slot, set in
+  Inspector -- weapon manager deferred to when a 2nd weapon exists).
+- _setup_equipped_weapon() (end of _ready()) applies: mesh -> WeaponMesh.mesh,
+  mesh_scale -> WeaponMesh.scale, reach -> hitbox Z length
+  (base_hitbox_length * reach). Null-guarded.
+
+**Attack hitbox + damage from weapon (hitbox approach A)**
+- reach drives the attack hitbox forward (Z) extent as a multiplier on
+  base_hitbox_length (@export, default 1.2). reach=1.0 keeps authored length
+  (clean A/B -- no behavior change on wire). Multiplier chosen over absolute
+  because multipliers compose for the future length_multiplier enchantment.
+- DebugMesh updated in lockstep with the collision shape (S8 parity convention
+  -- hitbox and debug box never drift).
+- Damage sourced from equipped_weapon.damage (falls back to
+  light_attack_damage when unarmed). Routes through the COMBAT_CONTRACT
+  hit-resolution path -- weapon parameterizes numbers, does not own resolution.
+- Approach A (abstract data-sized hitbox) over B (bone-attached): testable
+  now, serves length_multiplier directly. B deferred as accuracy refinement.
+
+**Floating damage numbers**
+- scenes/floating_damage_number.tscn -- Label3D, billboard on, no_depth_test,
+  outline for contrast. scripts/floating_damage_number.gd -- show_damage(),
+  Tween rise + fade, queue_free. No pooling (fine for current hit density;
+  pool when enemy waves arrive).
+- Spawned RECEIVER-SIDE inside take_damage() (dummy and player), showing
+  RESOLVED damage (post block/parry/stagger). Required by COMBAT_CONTRACT
+  part 2 -- only the receiver knows the resolved number. Works both damage
+  directions automatically; surfaces the stagger 2x visibly.
+- This closed the one unverifiable quantity in the weapon system: damage now
+  has a visual feedback surface (was only inferable from health-bar delta).
+
+**.tres authoring lesson (UID safety)**
+- A .tres with an external mesh reference carries an ext_resource UID. Hand-
+  written UIDs are the documented-fragile case (cache mismatch -> invalid-UID
+  warnings / Inspector-open errors). Authored Sword.tres via the Inspector
+  (drag mesh into slot) so Godot writes the UID correctly by construction.
+  GUI is the correct tool here, not a fallback. Recovery if a UID drifts: MCP
+  update_project_uids or a resave-all @tool script.
+
+### Key Decisions
+- reach and mesh_scale are MULTIPLIERS, not absolutes -- they compose with the
+  future WeaponEnchantment.length_multiplier.
+- Scale is data, seating (rotation/position) is node-level.
+- ComboStep typed sub-resource over Array[Dictionary] -- typo-resistant, holds
+  future per-step fields.
+- Hitbox approach A (abstract) first, B (bone-attached) as refinement.
+- Receiver-side damage-number spawn (combat-contract-correct).
+- mesh field wired at setup so the .tres is the single source for the mesh too
+  (closed the one declared-but-unread field from this session).
+
+### Docs
+- NEW docs/WEAPON_SYSTEM.md -- Tier-1 foundational. Contract vs first-rung
+  split (mirrors COMBAT_CONTRACT/COMBAT_FEEL). Field reference, ComboStep
+  rationale, data-flow, realized decisions, mesh pipeline, named extension
+  points with triggers.
+- docs/ASSET_AUDIT.md -- weapons section updated: BoneAttachment3D path proven,
+  OBJ-as-Mesh, bone_name RightHand, mesh_scale reality, fist-clipping accepted.
+- docs/COMBAT_FEEL.md -- carried-S9 additions written (parry-free rationale,
+  tuning baselines, hurtbox asymmetry, dodge-deferral direction).
+
+### Backlog (added/updated this session)
+- Per-step combo damage: add damage/damage_multiplier to ComboStep; finisher
+  rewards combo completion. ComboStep already shaped for it; hit handler knows
+  the live node. Fork: per-step multiplier on base vs absolute (lean
+  multiplier). Self-contained, ready to build.
+- Combo-handoff directional re-aim: bounded facing adjustment at _Rec handoff
+  points, reusing the cancel-window seam. Updates/supersedes the S6-deferred
+  re-aim note. Amount/rate is feel tuning -- wants moving enemies, pair with
+  enemy AI.
+- Weapon manager: promote the single equipped_weapon slot when a 2nd weapon
+  exists.
+- Per-weapon hitbox shapes: reach scales Z only now; per-weapon shape fields
+  when weapons need different hitbox shapes (not just lengths).
+- Weapon-driven animation sets: build AnimationTree attack nodes from
+  combo_steps (currently hand-built for sword); pays off the weapon-coupling
+  constraint when dagger/greatsword arrive.
+- Object pooling for damage numbers: when many-simultaneous-hit density
+  (enemy waves) arrives.
+- (Carried) enemy AI (high), run loop / waves / death (game-structure gap),
+  buffer-on-release (design settled), bone-attached hitbox (approach B).
+
+### Process Notes
+- Two deliberate scope overrides this session (ComboStep promotion, floating
+  damage numbers), each flagged aloud with a named reason tied to the work in
+  front of us -- ComboStep because the Dictionary friction was hit firsthand,
+  damage numbers because damage was the system's one unverifiable quantity.
+  Read-back verifications earned their keep: caught the wrong mesh (Spear vs
+  Sword) and the silently-dropped recovery keys before either became a runtime
+  debug loop. Long session with stacked expansions, all sound and committed at
+  clean milestones; flagged the pattern (productive expansion stays conscious)
+  without it being drift.
+
+### Commits This Session
+- s10: WeaponResource class -- data-driven weapon definition
+- s10: ComboStep typed sub-resource; Sword.tres first weapon instance
+- s10: sword mesh on RightHand via BoneAttachment3D; equipped_weapon seam;
+  data-driven mesh_scale
+- s10: attack hitbox reach + damage sourced from equipped_weapon
+- s10: floating damage numbers -- Label3D billboard, receiver-side spawn
+- s10: WeaponResource.mesh applied at setup; .tres is single source for mesh
+- (wrap commit: WEAPON_SYSTEM.md new, asset audit + combat feel + session notes)

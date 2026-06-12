@@ -233,8 +233,24 @@ UAL2 uses a consistent suffix convention across all combat clips:
 - Contents: 22 medieval weapons -- swords, axes, bows, hammers, shields
 - Format: FBX, OBJ, Blend (no glTF -- Godot imports FBX directly)
 - Rig: Static meshes only -- no skeleton, no animations
-- Status: Ready to use. Drop into scene, attach via BoneAttachment3D
-  to RightHand bone. No retarget required.
+- Import path: Use the OBJ files (assets/weapons/OBJ/*.obj), which import
+  as Mesh resources. FBX imports as PackedScene -- wrong primitive for a
+  static weapon prop. Assign Mesh directly to MeshInstance3D.mesh.
+- Attachment (proven S10): BoneAttachment3D (WeaponAttachment) child of
+  GeneralSkeleton, bone_name = "RightHand" (retargeted canonical name;
+  source name is hand_r -- same canonical-over-source pattern as Root).
+  MeshInstance3D (WeaponMesh) is a child of the attachment.
+  Full path: MeshPivot/Superhero_Male_FullBody/Armature/GeneralSkeleton/WeaponAttachment
+- mesh_scale: ~0.25 for the sword (gigantic at 1.0 -- Quaternius weapon
+  units are roughly 4x the character). Set per-weapon in
+  WeaponResource.mesh_scale (data). Seating offset (rotation/position) is
+  node-level -- set once in the editor, permanent. Layer test: "would a
+  buff change this?" Yes -> data. No -> node.
+- Hand clipping: closed-fist geometry clips the weapon at the grip.
+  Accepted as asset-family limitation -- the fix (per-weapon grip poses /
+  finger IK) is disproportionate and blocked by the baked-fist asset.
+  Do not relitigate per weapon.
+- Status: Pattern proven (Sword, S10). See docs/WEAPON_SYSTEM.md.
 - Notes: Visual style matches Quaternius character assets.
   CC0 -- no attribution required.
 

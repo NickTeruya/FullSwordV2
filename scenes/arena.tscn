@@ -3,12 +3,6 @@
 [ext_resource type="PackedScene" uid="uid://cbx10fh6k6enb" path="res://scenes/player.tscn" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/dummy.tscn" id="2"]
 
-[sub_resource type="BoxShape3D" id="1"]
-size = Vector3(20, 0.5, 20)
-
-[sub_resource type="BoxMesh" id="BoxMesh_e05a3"]
-size = Vector3(20, 0.5, 20)
-
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_arena"]
 sky_top_color = Color(0.4, 0.55, 0.85, 1)
 sky_horizon_color = Color(0.75, 0.8, 0.88, 1)
@@ -26,22 +20,28 @@ ambient_light_source = 2
 ambient_light_energy = 0.55
 tonemap_mode = 2
 
+[sub_resource type="BoxShape3D" id="1"]
+size = Vector3(20, 0.5, 20)
+
+[sub_resource type="BoxMesh" id="BoxMesh_e05a3"]
+size = Vector3(20, 0.5, 20)
+
 [node name="Arena" type="Node3D" unique_id=1829873246]
 
 [node name="Player" parent="." unique_id=1781697647 instance=ExtResource("1")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 
-[node name="Dummy" parent="." instance=ExtResource("2")]
+[node name="Dummy" parent="." unique_id=576306534 instance=ExtResource("2")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -5)
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1399897135]
 transform = Transform3D(1, 0, 0, 0, 0.7071068, 0.7071068, 0, -0.7071068, 0.7071068, 0, 10, 0)
 light_color = Color(1, 0.95, 0.9, 1)
 light_energy = 0.75
 shadow_enabled = true
 shadow_blur = 1.5
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1892506915]
 environment = SubResource("Environment_arena")
 
 [node name="Floor" type="StaticBody3D" parent="." unique_id=138309566]

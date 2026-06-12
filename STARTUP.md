@@ -89,6 +89,9 @@ knowledge:
     SESSION_NOTES.md
     docs/ASSET_AUDIT.md
     docs/V2_ARCHITECTURE.md
+    docs/ANIMATION_PIPELINE.md
+    docs/COMBAT_FEEL.md
+    docs/COMBAT_CONTRACT.md
 
 Re-upload SESSION_NOTES.md after every session wrap -- it is the only
 file that changes regularly. The others only need re-uploading if edited.
