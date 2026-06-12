@@ -2,6 +2,9 @@
 
 [ext_resource type="PackedScene" uid="uid://cbx10fh6k6enb" path="res://scenes/player.tscn" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/dummy.tscn" id="2"]
+[ext_resource type="Script" path="res://scripts/nav_region_bake.gd" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="5"]
+[ext_resource type="Resource" path="res://resources/archetypes/basic_swordsman.tres" id="6"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_arena"]
 sky_top_color = Color(0.4, 0.55, 0.85, 1)
@@ -26,6 +29,8 @@ size = Vector3(20, 0.5, 20)
 [sub_resource type="BoxMesh" id="BoxMesh_e05a3"]
 size = Vector3(20, 0.5, 20)
 
+[sub_resource type="NavigationMesh" id="NavMesh_spike"]
+
 [node name="Arena" type="Node3D" unique_id=1829873246]
 
 [node name="Player" parent="." unique_id=1781697647 instance=ExtResource("1")]
@@ -44,10 +49,18 @@ shadow_blur = 1.5
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1892506915]
 environment = SubResource("Environment_arena")
 
-[node name="Floor" type="StaticBody3D" parent="." unique_id=138309566]
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("NavMesh_spike")
+script = ExtResource("3")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor" unique_id=947660337]
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D" unique_id=138309566]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Floor" unique_id=947660337]
 shape = SubResource("1")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor" unique_id=346892476]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Floor" unique_id=346892476]
 mesh = SubResource("BoxMesh_e05a3")
+
+[node name="EnemyBasic" parent="." instance=ExtResource("5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 1, -3)
+archetype = ExtResource("6")
