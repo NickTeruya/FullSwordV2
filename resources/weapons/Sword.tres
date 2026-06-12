@@ -25,5 +25,6 @@ metadata/_custom_type_script = "uid://c14sxnj788r22"
 script = ExtResource("1_7u0mt")
 weapon_name = "Sword"
 mesh = ExtResource("1_5bhj1")
+mesh_scale = 0.25
 root_motion_intensity = 2.0
 combo_steps = Array[ExtResource("1_luqfe")]([SubResource("Resource_e21c2"), SubResource("Resource_hxikc"), SubResource("Resource_s3bjb")])

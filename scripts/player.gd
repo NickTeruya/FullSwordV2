@@ -67,6 +67,9 @@ enum State { GROUNDED, AIRBORNE, ATTACKING, BLOCKING }
 @export_group("Hitbox Debug")
 @export var debug_draw_hitboxes: bool = true
 
+@export_group("Weapon")
+@export var equipped_weapon: WeaponResource = null
+
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _current_state: State = State.GROUNDED
 var _landing_started_ms: int = -1    # Time.get_ticks_msec() at landing; -1 = not landing
@@ -310,6 +313,14 @@ func _ready() -> void:
 		health_bar.max_value = max_health
 		health_bar.value = _current_health
 		health_changed.connect(health_bar._on_health_changed)
+	_setup_equipped_weapon()
+
+func _setup_equipped_weapon() -> void:
+	if equipped_weapon == null:
+		push_warning("Player: no equipped_weapon assigned; WeaponMesh scale not applied.")
+		return
+	var weapon_mesh := $"MeshPivot/Superhero_Male_FullBody/Armature/GeneralSkeleton/WeaponAttachment/WeaponMesh" as MeshInstance3D
+	weapon_mesh.scale = Vector3.ONE * equipped_weapon.mesh_scale
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
@@ -551,7 +562,6 @@ func take_damage(amount: float) -> bool:
 			print("BLOCKED -- took %.1f on block" % amount)
 	_current_health = maxf(0.0, _current_health - amount)
 	health_changed.emit(_current_health, max_health)
-	print("Player took %.1f damage, health now %.1f" % [amount, _current_health])
 	return false
 
 func _on_attack_hit(area: Area3D) -> void:

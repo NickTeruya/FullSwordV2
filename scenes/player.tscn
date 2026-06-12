@@ -2,27 +2,26 @@
 
 [ext_resource type="Script" uid="uid://u2oftkdf8tpf" path="res://scripts/player.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://ddrka6sywpyb6" path="res://assets/characters/Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf" id="2"]
-[ext_resource type="Script" path="res://scripts/stamina_bar.gd" id="3"]
-[ext_resource type="Script" path="res://scripts/health_bar.gd" id="4"]
+[ext_resource type="Resource" uid="uid://cp2ljhsja0b6t" path="res://resources/weapons/Sword.tres" id="2_tuyoq"]
+[ext_resource type="Script" uid="uid://coff3msqvbfbm" path="res://scripts/stamina_bar.gd" id="3"]
+[ext_resource type="ArrayMesh" uid="uid://cuabnhlw8hxam" path="res://assets/weapons/OBJ/Sword.obj" id="3_qlg0r"]
+[ext_resource type="Script" uid="uid://bpblc7te6ysv1" path="res://scripts/health_bar.gd" id="4"]
 
 [sub_resource type="CapsuleShape3D" id="1"]
-radius = 0.5
-height = 2.0
-
-[sub_resource type="CapsuleShape3D" id="2"]
-radius = 0.4
-height = 1.8
 
 [sub_resource type="BoxShape3D" id="3"]
 size = Vector3(0.8, 0.8, 1.2)
 
-[sub_resource type="StandardMaterial3D" id="4"]
-transparency = 1
-shading_mode = 1
-albedo_color = Color(0, 1, 1, 0.5)
-
 [sub_resource type="BoxMesh" id="5"]
 size = Vector3(0.8, 0.8, 1.2)
+
+[sub_resource type="StandardMaterial3D" id="4"]
+transparency = 1
+albedo_color = Color(0, 1, 1, 0.5)
+
+[sub_resource type="CapsuleShape3D" id="2"]
+radius = 0.4
+height = 1.8
 
 [node name="Player" type="CharacterBody3D" unique_id=295594602]
 collision_layer = 2
@@ -31,6 +30,7 @@ script = ExtResource("1")
 locomotion_xfade = 0.25
 jump_chain_xfade = 0.25
 root_motion_scale = 2.0
+equipped_weapon = ExtResource("2_tuyoq")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1534405399]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
@@ -49,17 +49,25 @@ spring_length = 5.0
 
 [node name="Superhero_Male_FullBody" parent="MeshPivot" unique_id=110819459 instance=ExtResource("2")]
 
-[node name="AttackHitArea3D" type="Area3D" parent="MeshPivot"]
+[node name="WeaponAttachment" type="BoneAttachment3D" parent="MeshPivot/Superhero_Male_FullBody/Armature/GeneralSkeleton" parent_id_path=PackedInt32Array(110819459, 104095865) index="3" unique_id=240341560]
+transform = Transform3D(0, -1, 0, 0, 0, -1, 1, 0, 0, -0.70648694, 1.4555, -0.06539998)
+bone_name = "RightHand"
+bone_idx = 34
+
+[node name="WeaponMesh" type="MeshInstance3D" parent="MeshPivot/Superhero_Male_FullBody/Armature/GeneralSkeleton/WeaponAttachment" unique_id=303550801]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.01, 0.2, 0)
+mesh = ExtResource("3_qlg0r")
+
+[node name="AttackHitArea3D" type="Area3D" parent="MeshPivot" unique_id=1184812571]
 collision_layer = 8
 collision_mask = 16
-monitoring = true
 monitorable = false
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="MeshPivot/AttackHitArea3D"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="MeshPivot/AttackHitArea3D" unique_id=2017095794]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0.9)
 shape = SubResource("3")
 
-[node name="DebugMesh" type="MeshInstance3D" parent="MeshPivot/AttackHitArea3D"]
+[node name="DebugMesh" type="MeshInstance3D" parent="MeshPivot/AttackHitArea3D" unique_id=1586002540]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0.9)
 visible = false
 mesh = SubResource("5")
@@ -69,19 +77,18 @@ surface_material_override/0 = SubResource("4")
 
 [node name="AnimTree" type="AnimationTree" parent="." unique_id=2132860031]
 
-[node name="HurtArea3D" type="Area3D" parent="."]
+[node name="HurtArea3D" type="Area3D" parent="." unique_id=1117116824]
 collision_layer = 16
 collision_mask = 8
-monitoring = true
-monitorable = true
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="HurtArea3D"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="HurtArea3D" unique_id=451706096]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 shape = SubResource("2")
 
-[node name="HUD" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="." unique_id=304385707]
 
-[node name="StaminaBar" type="ProgressBar" parent="HUD"]
+[node name="StaminaBar" type="ProgressBar" parent="HUD" unique_id=418374562]
+modulate = Color(0.2, 1, 0.3, 1)
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
@@ -89,12 +96,11 @@ offset_left = 16.0
 offset_top = -36.0
 offset_right = 216.0
 offset_bottom = -16.0
-modulate = Color(0.2, 1, 0.3, 1)
-max_value = 100.0
 value = 100.0
 script = ExtResource("3")
 
-[node name="HealthBar" type="ProgressBar" parent="HUD"]
+[node name="HealthBar" type="ProgressBar" parent="HUD" unique_id=1535323938]
+modulate = Color(1, 0.2, 0.2, 1)
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
@@ -102,8 +108,6 @@ offset_left = 16.0
 offset_top = -66.0
 offset_right = 216.0
 offset_bottom = -46.0
-modulate = Color(1, 0.2, 0.2, 1)
-max_value = 100.0
 value = 100.0
 script = ExtResource("4")
 

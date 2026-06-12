@@ -11,6 +11,8 @@ class_name WeaponResource
 @export_group("Stats")
 # reach feeds the data-driven hitbox size and is the axis WeaponEnchantment.length_multiplier scales.
 @export var reach: float = 1.0
+# base uniform visual scale for the weapon mesh; future WeaponEnchantment.length_multiplier multiplies this.
+@export var mesh_scale: float = 1.0
 @export var damage: float = 10.0
 # seconds; tuning/reference value -- not yet driving animation playback rate.
 @export var swing_duration: float = 0.5
