@@ -1150,67 +1150,78 @@ on a throwaway spike first.
 - 2nd/3rd archetype (.tres authoring) once the roster needs to feel distinct.
 
 
-## Session 12 — DEAD state + Spawner foundation
+## Session 12 — DEAD state, Spawner, contract fix, build-method doc
 
-Two increments, both committed. The run loop now has its skeleton:
-enemies spawn → fight → die → clear.
+Planned two increments (DEAD + spawner); also shipped a contract-
+compliance fix and authored BUILD_SEQUENCE.md. Run-loop skeleton now
+exists: spawn → fight → die → clear.
 
-### Increment 1: DEAD state wiring (commit: s12-dead-state)
-The last unbuilt enemy SM state. take_damage already had a State.DEAD
-early-return guard (blocks re-entry) but no health<=0 check. Added:
-- Death check in take_damage AFTER the damage-label spawn, BEFORE
-  _enter_stagger() — a killing blow shows its number, then dies instead
-  of staggering. Death takes precedence over stagger.
-- _enter_dead(): mirrors _enter_stagger idiom — sets State.DEAD, zeroes
-  planar velocity, disarms HitArea via set_deferred("monitoring", false)
-  + _hit_debug.visible = false. Deferred for the same physics-signal
-  re-entrancy reason as stagger (take_damage runs from area_entered).
-- _process_dead(): terminal/absorbing. Zeroes planar velocity, counts
-  _death_timer up to @export death_despawn_delay (default 1.5s), then
-  queue_free(). No detection/steering/attack. Nothing transitions out.
-- New fields: @export death_despawn_delay (1.5), var _death_timer.
-Tested: normal kill (two staggers then DEAD, not a third stagger),
-mid-swing kill (deferred disarm holds — no posthumous hit), despawn
-fires. The 1.5s delay is the ragdoll/death-anim hook for later.
+### Increment 1: DEAD state (commit: s12-dead-state)
+Last unbuilt enemy SM state. take_damage had a State.DEAD early-return
+guard but no health<=0 check. Added: death check in take_damage AFTER
+the damage-label spawn, BEFORE _enter_stagger (a killing blow shows its
+number then dies, not staggers — death takes precedence). _enter_dead()
+mirrors _enter_stagger (State.DEAD, zero planar velocity, deferred hitbox
+disarm + debug off — same physics-signal re-entrancy reason). _process_dead
+is terminal/absorbing: zero velocity, count _death_timer to @export
+death_despawn_delay (1.5s), queue_free(). New fields: death_despawn_delay,
+_death_timer. Tested: normal kill, mid-swing kill (deferred disarm holds,
+no posthumous hit), despawn. The delay is the ragdoll/death-anim hook.
 
 ### Increment 2: Spawner foundation (commit: s12-spawner-foundation)
-Marker-driven enemy spawner. New: scenes/spawner.tscn + scripts/spawner.gd.
-- Spawner is a Node3D with @export enemy_scene + @export archetype and
-  Marker3D children (SpawnPoint1/2/3). _spawn_all iterates Marker3D
-  children; _spawn_one does instantiate → set archetype (BEFORE add_child,
-  since _ready reads it) → get_parent().add_child → add_to_group →
-  set global_position. Enemies spawn as direct Arena children (sibling of
-  Spawner), matching where hand-placed EnemyBasic sat — same nav space.
-- Enemy self-registers: add_to_group("enemies") added to enemy.gd _ready().
-  Intrinsic to being an enemy — every enemy is tracked however created.
-  queue_free auto-removes from group; no manual cleanup.
-- EnemyBasic removed from arena.tscn; spawner replaces it. Spawner count
-  readout prints get_nodes_in_group("enemies").size().
-- BUG FOUND + FIXED: add_child from _ready() failed with "Parent node is
-  busy setting up children" — the spawner's own parent was mid-setup.
-  Fix: _ready() calls call_deferred("_spawn_all") so the spawn pass runs
-  after the spawner is fully in-tree. Deferred the whole pass (not
-  per-enemy add_child.call_deferred) to keep archetype-before-add_child
-  ordering synchronous inside _spawn_one.
-Tested at scale: 3 enemies spawn at markers, "Live count: 3" prints, all
-three independently detect/chase. First real multi-agent test of the
-lazy player-ref + nav map_get_iteration_id guard — both held.
+Marker-driven spawner. New: scenes/spawner.tscn + scripts/spawner.gd.
+Node3D with @export enemy_scene + archetype and Marker3D children;
+_spawn_one does instantiate → set archetype (BEFORE add_child, _ready
+reads it) → get_parent().add_child → add_to_group → set global_position.
+Enemies spawn as direct Arena children (sibling of Spawner), matching
+hand-placed EnemyBasic's nav space. Enemy self-registers: add_to_group
+("enemies") in enemy.gd _ready() — intrinsic to being an enemy, tracked
+however created. EnemyBasic removed; spawner replaces it.
+BUG FOUND + FIXED: add_child from _ready() failed ("parent busy setting up
+children") — spawner's own parent was mid-setup. Fix: _ready() calls
+call_deferred("_spawn_all") so the pass runs after the spawner is in-tree.
+Tested at scale: 3 enemies spawn, "Live count: 3", all three independently
+detect/chase/die. First multi-agent test of lazy player-ref + nav guard —
+both held.
 
-### Group-ownership decision (researched, recorded)
-Where live-enemy tracking lives, decided with web research:
-- GROUP membership ("who exists now") = the ENEMY's own property; it
-  self-registers in its _ready(). Tracked however created (spawned,
-  hand-placed, future death-split). One line, can't be forgotten.
-- DEATH NOTIFICATION ("one just died") = a SIGNAL, deferred until a
-  system consumes it. Foundation doesn't need it (kill-and-watch is
-  eye-verifiable). Build the died signal when respawn/max-count/wave
-  logic or the death-split enemy actually reacts to a death.
-- Group answers "who's alive"; a signal answers "a death happened" — a
-  group can't notify on tree-exit, so polling it every frame is the wrong
-  tool for death reactions. Build each when consumed (testability-first).
+### Group-ownership decision (web-researched, recorded)
+Group membership ("who's alive") = enemy's own property, self-registered.
+Death notification ("one died") = a SIGNAL, deferred until consumed
+(respawn/wave/death-split). A group can't notify on tree-exit, so polling
+it for death reactions is the wrong tool. Build each when consumed.
 
-### Deferred this session (carry-over)
-- Stale UID on basic_swordsman.tres (text-path fallback masked it; load
-  works). Clean with update_project_uids or a re-save when convenient.
-- Cosmetic nav voxel-ceiling warning (agent_radius vs cell_size) — bakes
-  fine, already on backlog.
+### Contract fix: enemy take_damage -> bool (commit: fix enemy take_damage)
+Intermittent Nil-to-bool in dummy.gd:92 — dummy assigns take_damage's
+return to a strict `var: bool`. Enemy take_damage was -> void (returns
+Nil). Triggered when a spawned enemy wandered into the dummy's swing arc
+(intermittent = nav approach vectors varied per run). Fix: enemy
+take_damage -> bool, return false on all paths (DEAD, death, stagger) —
+the enemy has no defensive verb so nothing is negated. This is
+COMBAT_CONTRACT part-3's named extension point coming due (an attacker
+reads the return). NOT introduced by this session's other work — latent
+since the spawner made enemies roam. Docs updated in lockstep
+(COMBAT_CONTRACT, ENEMY_ARCHITECTURE).
+
+### New doc: BUILD_SEQUENCE.md
+Methodology + sequencing doc, portable-first, built to survive a V3
+rebuild. Three layers: (1) portable principles (recon-before-edit,
+testability-first, build-for-what's-consumed, seams-over-constants, tier-
+docs-by-stability, one-change-at-a-time, diagnostics-before-tuning,
+defer-by-default); (2) V2 as-built archaeology (contract, data/inheritance
+axes, single-owner state, spawn-order discipline, enum+match SM); (3) the
+living sequence — inside-out Layer 0–3 ordering, validated by core-loop
+research, with the current backlog ordered against it.
+
+### Combat-feel pass: SCOPED, not yet built
+Decided Option A (single cancel_window_open threshold, all cancels unlock
+together) + cancel-into-block included. Prompt written, paused before
+running. This is Session 13's next-up build. Jump float already tuned via
+jump_peak_gravity_multiplier (Inspector knob).
+
+### Feel-flags logged (tuning, not increments)
+- Combo chain window never closes (late press always chains).
+- Enemy stun-lock (5 staggers→DEAD observed; infinite stun removes threat).
+
+### Deferred / carry-over
+Stale UID on basic_swordsman.tres (text-path fallback works; refresh via
+update_project_uids). Cosmetic nav voxel-ceiling warning (bakes fine).

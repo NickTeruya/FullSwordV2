@@ -44,14 +44,16 @@ the attacker.
 
 IMPORTANT -- this is a general pattern, instantiated per-side only where
 a defensive verb exists. As of S9 only the PLAYER has a defensive verb
-(block/parry), so only `player.gd take_damage` returns bool; the dummy's
-`take_damage` is currently void and the player's outgoing handler
-discards any return. This is correct, not a gap: the dummy has nothing
-to negate with. EXTENSION POINT: when an enemy gains a defensive verb,
-its `take_damage` adopts the identical `-> bool` signature and its
-attackers (including the player's `_on_attack_hit`) read the return.
-The pattern is symmetric by design; it is half-instantiated only because
-defense is currently one-sided.
+(block/parry), so only `player.gd take_damage` returns bool. S12 lesson:
+a victim MUST return bool if any attacker assigns the return to a strictly-
+typed `var x: bool` -- a `-> void` victim yields Nil at a strict call site
+and throws. The dummy's `take_damage` is still `-> void` (nothing reads its
+return); the enemy's `take_damage` is now `-> bool` returning false on all
+paths (DEAD early-return, death path, stagger path) because the dummy
+assigns it to `var was_parried: bool`. No defensive verb yet -- only the
+return values change when one arrives, not the signature. EXTENSION POINT:
+the `-> bool` signature is already correct; a future defensive verb changes
+only the return values, not the function shape.
 
 ### 4. Physics-property toggles inside signal dispatch must defer
 An Area3D's `monitoring` property cannot be set directly from inside an
@@ -83,10 +85,11 @@ held when extended.
   player via body_entered and calls the player's take_damage — attacker
   detects victim, receiver owns outcome (parts 1 & 2). Self-hit guard
   (get_parent() == self) present.
-- Enemy take_damage is `-> void` — correct per part 3: the enemy has no
-  defensive verb yet (bool return is for parry/block, currently player-only).
-  When an enemy gains a defensive verb, it adopts the `-> bool` signature
-  per the extension point already named in part 3.
+- Enemy take_damage is `-> bool` returning false on all paths (S12:
+  contract-compliance fix). The dummy assigns the return to `var was_parried:
+  bool`; a `-> void` victim yields Nil at that strict call site and throws.
+  No defensive verb yet -- return values (all false) change when one arrives;
+  the `-> bool` signature is already correct per part 3.
 - Stagger-mid-swing disarms the enemy hitbox via
   set_deferred("monitoring", false) — part 4 (physics-signal re-entrancy)
   applies to the enemy's own attack interruption.

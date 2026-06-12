@@ -153,9 +153,12 @@ its correct shape. This pattern is LOAD-BEARING for multi-enemy setups.
 The enemy is the second attacker built against COMBAT_CONTRACT.md;
 the contract held when extended.
 
-- **take_damage(amount) -> void** — void return is correct: the enemy has
-  no defensive verb yet (contract part 3 — bool is for parry/block, which
-  is player-only as of now). Taking a hit transitions to STAGGER.
+- **take_damage(amount) -> bool** — returns false on all paths (DEAD
+  early-return, death path, stagger path). An attacker assigns the return
+  to a strict `var: bool`; a `-> void` victim yields Nil and throws (S12
+  bug, fixed). No defensive verb yet -- the return values (not the
+  signature) change when one arrives (COMBAT_CONTRACT part 3 extension
+  point). Taking a hit transitions to STAGGER or DEAD.
 - **Attack hitbox** — HitArea3D, layer 8 / mask 16 (the S8 hit-layer
   contract; mirrors the dummy). `body_entered` calls the player's
   take_damage (receiver owns outcome). Self-hit guard:
