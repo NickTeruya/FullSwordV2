@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3 uid="uid://cp2ljhsja0b6t"]
+
+[ext_resource type="ArrayMesh" uid="uid://cuabnhlw8hxam" path="res://assets/weapons/OBJ/Sword.obj" id="1_5bhj1"]
+[ext_resource type="Script" uid="uid://cf6pvjqy2hqyk" path="res://scripts/weapon_resource.gd" id="1_7u0mt"]
+[ext_resource type="Script" uid="uid://c14sxnj788r22" path="res://scripts/combo_step.gd" id="1_luqfe"]
+
+[sub_resource type="Resource" id="Resource_e21c2"]
+script = ExtResource("1_luqfe")
+swing = "Sword_Regular_A"
+recovery = "Sword_Regular_A_Rec"
+metadata/_custom_type_script = "uid://c14sxnj788r22"
+
+[sub_resource type="Resource" id="Resource_hxikc"]
+script = ExtResource("1_luqfe")
+swing = "Sword_Regular_B"
+recovery = "Sword_Regular_B_Rec"
+metadata/_custom_type_script = "uid://c14sxnj788r22"
+
+[sub_resource type="Resource" id="Resource_s3bjb"]
+script = ExtResource("1_luqfe")
+swing = "Sword_Regular_C"
+metadata/_custom_type_script = "uid://c14sxnj788r22"
+
+[resource]
+script = ExtResource("1_7u0mt")
+weapon_name = "Sword"
+mesh = ExtResource("1_5bhj1")
+root_motion_intensity = 2.0
+combo_steps = Array[ExtResource("1_luqfe")]([SubResource("Resource_e21c2"), SubResource("Resource_hxikc"), SubResource("Resource_s3bjb")])

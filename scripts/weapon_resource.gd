@@ -23,4 +23,4 @@ class_name WeaponResource
 # Strings are AnimationTree node names (e.g. "Sword_Regular_A" / "Sword_Regular_A_Rec").
 # Empty "recovery" means no recovery clip (finisher).
 # Held as data this session; not yet driving dynamic AnimationTree construction.
-@export var combo_steps: Array[Dictionary] = []
+@export var combo_steps: Array[ComboStep] = []
